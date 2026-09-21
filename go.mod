@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	github.com/chzyer/readline v1.5.1
 	github.com/oiweiwei/go-msrpc v1.6.3
+	github.com/oiweiwei/gokrb5.fork/v9 v9.0.8
 )
 
 require (
@@ -22,7 +23,6 @@ require (
 	github.com/oiweiwei/go-math v1.0.0 // indirect
 	github.com/oiweiwei/go-oem v1.0.0 // indirect
 	github.com/oiweiwei/go-smb2.fork v1.0.2 // indirect
-	github.com/oiweiwei/gokrb5.fork/v9 v9.0.8 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
