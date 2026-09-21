@@ -37,3 +37,18 @@ func TestUseName(t *testing.T) {
 		}
 	}
 }
+
+func TestIsDefaultShare(t *testing.T) {
+	defaults := []string{"ADMIN$", "C$", "Y$", "IPC$", "NETLOGON", "SYSVOL", "PRINT$", "admin$"}
+	for _, s := range defaults {
+		if !isDefaultShare(s) {
+			t.Errorf("isDefaultShare(%q) = false, want true", s)
+		}
+	}
+	custom := []string{"DeploymentShare$", "Backups", "share", "data$dir"}
+	for _, s := range custom {
+		if isDefaultShare(s) {
+			t.Errorf("isDefaultShare(%q) = true, want false", s)
+		}
+	}
+}

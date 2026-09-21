@@ -54,59 +54,81 @@ func decodeACB(acb uint32) string {
 	return strings.Join(tags, ",")
 }
 
+// DisplayUser is one account from SamrQueryDisplayInformation.
+type DisplayUser struct {
+	RID         uint32
+	Name        string
+	Description string
+	ACB         uint32
+}
+
+// collectDisplayUsers pages through SamrQueryDisplayInformation for all users.
+func collectDisplayUsers(s *session.Session) ([]DisplayUser, error) {
+	h, _, err := s.OpenCurrentDomain()
+	if err != nil {
+		return nil, err
+	}
+	var users []DisplayUser
+	index := uint32(0)
+	for {
+		resp, err := s.Samr().QueryDisplayInformation(s.Context(), &samr.QueryDisplayInformationRequest{
+			Domain:                  h,
+			DisplayInformationClass: samr.DomainDisplayInformationUser,
+			Index:                   index,
+			EntryCount:              1000,
+			PreferredMaximumLength:  0xffffffff,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("query display info: %w", err)
+		}
+		if resp.Buffer == nil {
+			break
+		}
+		val := resp.Buffer.GetValue()
+		buf, ok := val.(*samr.DomainDisplayUserBuffer)
+		if !ok {
+			return nil, fmt.Errorf("unexpected display buffer arm %T", val)
+		}
+		if len(buf.Buffer) == 0 {
+			break
+		}
+		for _, u := range buf.Buffer {
+			users = append(users, DisplayUser{
+				RID:         u.RID,
+				Name:        ustr(u.AccountName),
+				Description: ustr(u.AdminComment),
+				ACB:         u.AccountControl,
+			})
+		}
+		index += uint32(len(buf.Buffer))
+		if uint32(len(users)) >= resp.TotalAvailable {
+			break
+		}
+	}
+	return users, nil
+}
+
 var queryDispInfoCmd = &Command{
 	Name:    "querydispinfo",
 	Aliases: []string{"dispinfo"},
 	Usage:   "querydispinfo",
 	Help:    "List users with description and decoded account-control flags (often works when enumdomusers is denied).",
 	Run: func(s *session.Session, out *output.Printer, _ []string) error {
-		h, _, err := s.OpenCurrentDomain()
+		users, err := collectDisplayUsers(s)
 		if err != nil {
 			return err
 		}
-		rows := [][]string{}
-		index := uint32(0)
-		var totalAvailable uint32
-		for {
-			resp, err := s.Samr().QueryDisplayInformation(s.Context(), &samr.QueryDisplayInformationRequest{
-				Domain:                  h,
-				DisplayInformationClass: samr.DomainDisplayInformationUser,
-				Index:                   index,
-				EntryCount:              1000,
-				PreferredMaximumLength:  0xffffffff,
-			})
-			if err != nil {
-				return fmt.Errorf("query display info: %w", err)
-			}
-			totalAvailable = resp.TotalAvailable
-			if resp.Buffer == nil {
-				break
-			}
-			val := resp.Buffer.GetValue()
-			buf, ok := val.(*samr.DomainDisplayUserBuffer)
-			if !ok {
-				return fmt.Errorf("unexpected display buffer arm %T (TotalAvailable=%d, TotalReturned=%d)",
-					val, resp.TotalAvailable, resp.TotalReturned)
-			}
-			if len(buf.Buffer) == 0 {
-				break
-			}
-			users := buf.Buffer
-			for _, u := range users {
-				rows = append(rows, []string{
-					strconv.FormatUint(uint64(u.RID), 10),
-					ustr(u.AccountName),
-					ustr(u.AdminComment),
-					decodeACB(u.AccountControl),
-				})
-			}
-			index += uint32(len(users))
-			if uint32(len(rows)) >= resp.TotalAvailable {
-				break
-			}
+		if len(users) == 0 {
+			out.Infof("[!] querydispinfo returned no entries; the DC likely restricts display info for this account; try 'enumdomusers' (LSAT fallback)")
 		}
-		if len(rows) == 0 {
-			out.Infof("[!] querydispinfo returned no entries (server TotalAvailable=%d); the DC likely restricts display info for this account; try 'enumdomusers' (LSAT fallback)", totalAvailable)
+		rows := make([][]string, 0, len(users))
+		for _, u := range users {
+			rows = append(rows, []string{
+				strconv.FormatUint(uint64(u.RID), 10),
+				u.Name,
+				u.Description,
+				decodeACB(u.ACB),
+			})
 		}
 		out.Table([]string{"RID", "Name", "Description", "Flags"}, rows)
 		return nil
