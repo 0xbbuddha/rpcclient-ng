@@ -51,6 +51,8 @@ rpcclient-ng [flags] <target>
 | `-H` | NT hash for pass-the-hash (`LM:NT` or bare `NT`) |
 | `-d` | Domain (NetBIOS or FQDN) |
 | `-k` | Use Kerberos auth from the ccache in `KRB5CCNAME` |
+| `-N` | Null session (anonymous, no credentials) |
+| `-dc-ip` | IP/host to connect to, keeping `<target>` as the Kerberos SPN name |
 | `-c` | Run a single command, then exit |
 | `-json` | Emit output as JSON |
 | `-no-seal` | Disable DCERPC packet privacy (sealing) |

@@ -34,13 +34,15 @@ const (
 
 // Config carries the connection parameters for a session.
 type Config struct {
-	Target   string
-	Username string
-	Password string
-	NTHash   string
-	Domain   string
-	Seal     bool
-	Kerberos bool
+	Target      string
+	Username    string
+	Password    string
+	NTHash      string
+	Domain      string
+	Seal        bool
+	Kerberos    bool
+	NullSession bool
+	DCIP        string // network address to dial (target stays the SPN/name)
 }
 
 // Domain is a discovered SAM domain and its SID.
@@ -90,6 +92,9 @@ func (s *Session) Context() context.Context { return s.ctx }
 func (s *Session) Connect() error {
 	gssapi.AddMechanism(ssp.SPNEGO)
 	switch {
+	case s.cfg.NullSession:
+		gssapi.AddCredential(credential.Anonymous())
+		gssapi.AddMechanism(ssp.NTLM)
 	case s.cfg.Kerberos:
 		ccPath := ccachePath()
 		if ccPath == "" {
@@ -144,12 +149,25 @@ func (s *Session) Connect() error {
 func (s *Session) dial(pipe string) (dcerpc.Conn, error) {
 	opts := []dcerpc.Option{dcerpc.WithEndpoint("ncacn_np:[" + pipe + "]")}
 	opts = append(opts, s.dialExtra...)
-	return dcerpc.Dial(s.ctx, s.cfg.Target, opts...)
+	return dcerpc.Dial(s.ctx, s.dialHost(), opts...)
+}
+
+// dialHost is the network address to connect to: the explicit --dc-ip when set,
+// otherwise the target (which also serves as the Kerberos SPN name).
+func (s *Session) dialHost() string {
+	if s.cfg.DCIP != "" {
+		return s.cfg.DCIP
+	}
+	return s.cfg.Target
 }
 
 // secOpts returns the DCERPC security options for client binds. Under Kerberos,
 // the sealed bind runs its own AP exchange and needs the SMB service principal.
 func (s *Session) secOpts() []dcerpc.Option {
+	// A null session has no session key, so it cannot seal; bind unauthenticated.
+	if s.cfg.NullSession {
+		return []dcerpc.Option{dcerpc.WithInsecure()}
+	}
 	var opts []dcerpc.Option
 	if s.cfg.Seal {
 		opts = append(opts, dcerpc.WithSeal())
@@ -373,6 +391,9 @@ func (s *Session) ensureSRVS() error {
 // securityAttempts lists the DCERPC security options to try, in order. Sealing
 // is preferred when enabled, with an insecure bind as a fallback.
 func (s *Session) securityAttempts() [][]dcerpc.Option {
+	if s.cfg.NullSession {
+		return [][]dcerpc.Option{{dcerpc.WithInsecure()}}
+	}
 	var krb []dcerpc.Option
 	if s.cfg.Kerberos {
 		krb = []dcerpc.Option{dcerpc.WithTargetName("cifs/" + s.cfg.Target)}
