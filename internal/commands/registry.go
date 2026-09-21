@@ -86,5 +86,10 @@ func allCommands() []*Command {
 		lookupSidsCmd,
 		ridCycleCmd,
 		sweepCmd,
+		createDomUserCmd,
+		delDomUserCmd,
+		addGroupMemCmd,
+		delGroupMemCmd,
+		addAliasMemCmd,
 	}
 }
