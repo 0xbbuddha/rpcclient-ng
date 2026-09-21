@@ -1,0 +1,19 @@
+# Compiled binary
+/rpcclient-ng
+/dist/
+
+# Go build & test artifacts
+*.exe
+*.test
+*.out
+coverage.*
+
+# Kerberos tickets / loot
+*.ccache
+*.kirbi
+
+# Editor & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
