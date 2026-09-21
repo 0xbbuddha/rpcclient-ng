@@ -3,11 +3,17 @@ package session
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/oiweiwei/go-msrpc/dcerpc"
+	"github.com/oiweiwei/go-msrpc/smb2"
 	"github.com/oiweiwei/go-msrpc/ssp"
 	"github.com/oiweiwei/go-msrpc/ssp/credential"
 	"github.com/oiweiwei/go-msrpc/ssp/gssapi"
+	"github.com/oiweiwei/go-msrpc/ssp/krb5"
+
+	fcreds "github.com/oiweiwei/gokrb5.fork/v9/credentials"
 
 	"github.com/oiweiwei/go-msrpc/msrpc/dtyp"
 	lsad "github.com/oiweiwei/go-msrpc/msrpc/lsad/lsarpc/v0"
@@ -32,6 +38,7 @@ type Config struct {
 	NTHash   string
 	Domain   string
 	Seal     bool
+	Kerberos bool
 }
 
 // Domain is a discovered SAM domain and its SID.
@@ -58,6 +65,8 @@ type Session struct {
 	lsadPolicy *lsad.Handle
 
 	srvs srvsvc.SrvsvcClient
+
+	dialExtra []dcerpc.Option // extra dial options (e.g. Kerberos SMB dialer)
 }
 
 // New builds a session from the given config.
@@ -76,31 +85,42 @@ func (s *Session) Context() context.Context { return s.ctx }
 
 // Connect authenticates and binds the SAMR interface.
 func (s *Session) Connect() error {
-	var cred any
-	switch {
-	case s.cfg.NTHash != "":
-		cred = credential.NewFromNTHash(s.principal(), s.cfg.NTHash)
-	default:
-		cred = credential.NewFromPassword(s.principal(), s.cfg.Password)
-	}
-
-	gssapi.AddCredential(cred)
 	gssapi.AddMechanism(ssp.SPNEGO)
-	gssapi.AddMechanism(ssp.NTLM)
+	switch {
+	case s.cfg.Kerberos:
+		ccPath := ccachePath()
+		if ccPath == "" {
+			return fmt.Errorf("kerberos: set KRB5CCNAME to your credential cache")
+		}
+		cc, err := fcreds.LoadCCache(ccPath)
+		if err != nil {
+			return fmt.Errorf("kerberos: load ccache %q: %w", ccPath, err)
+		}
+		kcfg := krb5.NewConfig()
+		kcfg.CCachePath = ccPath
+		kcfg.DCEStyle = true // required for DCERPC over Kerberos
+		gssapi.AddCredential(credential.NewFromCCacheV9(ccachePrincipal(cc), cc))
+		gssapi.AddMechanism(gssapi.WithDefaultConfig(ssp.KRB5, kcfg))
+		// Kerberos needs the full SMB service principal (cifs/<host>); go-msrpc
+		// uses the target name verbatim as the SPN, so add the service class.
+		dialer := smb2.NewDialer(smb2.WithSecurity(gssapi.WithTargetName("cifs/" + s.cfg.Target)))
+		s.dialExtra = []dcerpc.Option{dcerpc.WithSMBDialer(dialer)}
+	case s.cfg.NTHash != "":
+		gssapi.AddCredential(credential.NewFromNTHash(s.principal(), s.cfg.NTHash))
+		gssapi.AddMechanism(ssp.NTLM)
+	default:
+		gssapi.AddCredential(credential.NewFromPassword(s.principal(), s.cfg.Password))
+		gssapi.AddMechanism(ssp.NTLM)
+	}
 
 	s.ctx = gssapi.NewSecurityContext(context.Background())
 
-	opts := []dcerpc.Option{}
-	if s.cfg.Seal {
-		opts = append(opts, dcerpc.WithSeal())
-	}
-
-	cc, err := dcerpc.Dial(s.ctx, s.cfg.Target, dcerpc.WithEndpoint("ncacn_np:[samr]"))
+	cc, err := s.dial("samr")
 	if err != nil {
 		return fmt.Errorf("dial samr: %w", err)
 	}
 
-	s.samr, err = samr.NewSamrClient(s.ctx, cc, opts...)
+	s.samr, err = samr.NewSamrClient(s.ctx, cc, s.secOpts()...)
 	if err != nil {
 		return fmt.Errorf("bind samr: %w", err)
 	}
@@ -114,6 +134,42 @@ func (s *Session) Connect() error {
 	s.samrServer = conn.Server
 
 	return s.loadDomains()
+}
+
+// dial opens a DCERPC connection to the given named pipe, routing through the
+// Kerberos-aware SMB dialer when one is configured.
+func (s *Session) dial(pipe string) (dcerpc.Conn, error) {
+	opts := []dcerpc.Option{dcerpc.WithEndpoint("ncacn_np:[" + pipe + "]")}
+	opts = append(opts, s.dialExtra...)
+	return dcerpc.Dial(s.ctx, s.cfg.Target, opts...)
+}
+
+// secOpts returns the DCERPC security options for client binds. Under Kerberos,
+// the sealed bind runs its own AP exchange and needs the SMB service principal.
+func (s *Session) secOpts() []dcerpc.Option {
+	var opts []dcerpc.Option
+	if s.cfg.Seal {
+		opts = append(opts, dcerpc.WithSeal())
+	}
+	if s.cfg.Kerberos {
+		opts = append(opts, dcerpc.WithTargetName("cifs/"+s.cfg.Target))
+	}
+	return opts
+}
+
+// ccachePath resolves the Kerberos credential cache from KRB5CCNAME, stripping
+// the optional "FILE:" prefix. go-msrpc otherwise only checks KRB5_CCACHE.
+func ccachePath() string {
+	return strings.TrimPrefix(os.Getenv("KRB5CCNAME"), "FILE:")
+}
+
+// ccachePrincipal returns the ccache's default client principal as user@REALM.
+func ccachePrincipal(cc *fcreds.CCache) string {
+	p := cc.DefaultPrincipal
+	if len(p.PrincipalName.NameString) == 0 {
+		return ""
+	}
+	return p.PrincipalName.NameString[0] + "@" + p.Realm
 }
 
 func (s *Session) principal() string {
@@ -219,15 +275,11 @@ func (s *Session) ensureLSAT() error {
 	if s.lsat != nil {
 		return nil
 	}
-	opts := []dcerpc.Option{}
-	if s.cfg.Seal {
-		opts = append(opts, dcerpc.WithSeal())
-	}
-	cc, err := dcerpc.Dial(s.ctx, s.cfg.Target, dcerpc.WithEndpoint("ncacn_np:[lsarpc]"))
+	cc, err := s.dial("lsarpc")
 	if err != nil {
 		return fmt.Errorf("dial lsarpc: %w", err)
 	}
-	s.lsat, err = lsat.NewLsarpcClient(s.ctx, cc, opts...)
+	s.lsat, err = lsat.NewLsarpcClient(s.ctx, cc, s.secOpts()...)
 	if err != nil {
 		return fmt.Errorf("bind lsarpc: %w", err)
 	}
@@ -255,15 +307,11 @@ func (s *Session) ensureLSAD() error {
 	if s.lsad != nil {
 		return nil
 	}
-	opts := []dcerpc.Option{}
-	if s.cfg.Seal {
-		opts = append(opts, dcerpc.WithSeal())
-	}
-	cc, err := dcerpc.Dial(s.ctx, s.cfg.Target, dcerpc.WithEndpoint("ncacn_np:[lsarpc]"))
+	cc, err := s.dial("lsarpc")
 	if err != nil {
 		return fmt.Errorf("dial lsarpc (lsad): %w", err)
 	}
-	s.lsad, err = lsad.NewLsarpcClient(s.ctx, cc, opts...)
+	s.lsad, err = lsad.NewLsarpcClient(s.ctx, cc, s.secOpts()...)
 	if err != nil {
 		return fmt.Errorf("bind lsad: %w", err)
 	}
@@ -295,12 +343,12 @@ func (s *Session) ensureSRVS() error {
 	}
 	var lastErr error
 	for _, sec := range s.securityAttempts() {
-		cc, err := dcerpc.Dial(s.ctx, s.cfg.Target, dcerpc.WithEndpoint("ncacn_np:[srvsvc]"))
+		cc, err := s.dial("srvsvc")
 		if err != nil {
 			lastErr = fmt.Errorf("dial srvsvc: %w", err)
 			continue
 		}
-		cli, err := srvsvc.NewSrvsvcClient(s.ctx, cc, sec)
+		cli, err := srvsvc.NewSrvsvcClient(s.ctx, cc, sec...)
 		if err != nil {
 			lastErr = fmt.Errorf("bind srvsvc: %w", err)
 			continue
@@ -313,11 +361,18 @@ func (s *Session) ensureSRVS() error {
 
 // securityAttempts lists the DCERPC security options to try, in order. Sealing
 // is preferred when enabled, with an insecure bind as a fallback.
-func (s *Session) securityAttempts() []dcerpc.Option {
-	if s.cfg.Seal {
-		return []dcerpc.Option{dcerpc.WithSeal(), dcerpc.WithInsecure()}
+func (s *Session) securityAttempts() [][]dcerpc.Option {
+	var krb []dcerpc.Option
+	if s.cfg.Kerberos {
+		krb = []dcerpc.Option{dcerpc.WithTargetName("cifs/" + s.cfg.Target)}
 	}
-	return []dcerpc.Option{dcerpc.WithInsecure()}
+	if s.cfg.Seal {
+		return [][]dcerpc.Option{
+			append([]dcerpc.Option{dcerpc.WithSeal()}, krb...),
+			{dcerpc.WithInsecure()},
+		}
+	}
+	return [][]dcerpc.Option{{dcerpc.WithInsecure()}}
 }
 
 // SRVS returns the bound Server Service client, binding on first use.

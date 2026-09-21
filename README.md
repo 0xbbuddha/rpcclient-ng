@@ -50,6 +50,7 @@ rpcclient-ng [flags] <target>
 | `-p` | Password |
 | `-H` | NT hash for pass-the-hash (`LM:NT` or bare `NT`) |
 | `-d` | Domain (NetBIOS or FQDN) |
+| `-k` | Use Kerberos auth from the ccache in `KRB5CCNAME` |
 | `-c` | Run a single command, then exit |
 | `-json` | Emit output as JSON |
 | `-no-seal` | Disable DCERPC packet privacy (sealing) |
@@ -73,6 +74,18 @@ Pass-the-hash, JSON output:
 ```sh
 rpcclient-ng -d corp.local -u j.doe -H aad3b435...:e19ccf75... -json -c querydispinfo dc01.corp.local
 ```
+
+Kerberos (from a ccache):
+
+```sh
+export KRB5CCNAME=/path/to/j.doe.ccache
+rpcclient-ng -k -c enumdomgroups dc01.corp.local
+```
+
+Kerberos requires, as usual: a valid TGT in the ccache pointed to by `KRB5CCNAME`,
+a resolvable KDC (via `/etc/krb5.conf` and, on isolated networks, an `/etc/hosts`
+entry for the DC), the target given as the DC FQDN (so the `cifs/<fqdn>` service
+ticket matches), and the local clock within skew of the DC.
 
 ## Commands
 
