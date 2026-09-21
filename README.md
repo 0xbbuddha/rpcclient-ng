@@ -19,10 +19,10 @@ at the first `NT_STATUS_ACCESS_DENIED`.
 - **Single static binary**: no Python, no Samba, cross-compiles to Linux, Windows and macOS.
 - **Automatic fallbacks**: `enumdomusers` transparently switches to LSAT RID cycling when SAMR enumeration is denied.
 - **Enriched output**: account-control flags are decoded to readable tags (`DISABLED`, `AS-REP_ROASTABLE`, `PWD_NEVER_EXPIRES`, `TRUSTED_FOR_DELEG`, ...) instead of raw hex.
-- **Multiple RPC interfaces**: SAMR, LSAT, LSA policy and Server Service in one shell.
+- **Multiple RPC interfaces**: SAMR, LSAT, LSA policy, Server Service and Workstation Service in one shell.
 - **Interactive shell** with tab-completion, plus a one-shot mode for scripting.
 - **Table or JSON output** for piping into other tooling.
-- **Modern authentication**: password and pass-the-hash (Kerberos planned).
+- **Modern authentication**: password, pass-the-hash and Kerberos from a ccache.
 
 ## Installation
 
@@ -112,13 +112,35 @@ ticket matches), and the local clock within skew of the DC.
 | `lookupsids <sid>...` | Translate SIDs to account names |
 | `ridcycle [start] [end]` | Sweep RIDs against the domain SID and resolve them (default 500-1100) |
 
-### Policy & host (LSA / srvsvc)
+### Policy, trusts & rights (LSA)
 
 | Command | Description |
 |---------|-------------|
 | `lsaquery` | Query LSA policy for account and DNS domain information (name, SID, forest) |
 | `getusername` | Show the account name and domain of the authenticated user |
+| `lsaenumtrustdom` | Enumerate trusted domains with direction, type and decoded attributes |
+| `lsaenumprivs` | Enumerate the privileges known to the target's LSA, with their LUIDs |
+| `lsaenumaccounts` | Enumerate the accounts holding LSA privileges or rights, resolved to names |
+| `lsaenumacctrights <sid\|name>` | List the privileges and system-access rights held by one account |
+
+### Host, shares & sessions (srvsvc / wkssvc)
+
+| Command | Description |
+|---------|-------------|
+| `netservergetinfo` | Server identity, OS version and decoded server-type flags |
+| `wkstagetinfo` | Workstation identity: computer name, LAN group and version |
 | `netshareenum` | Enumerate the shared resources on the target |
+| `netsessenum` | Enumerate the SMB sessions open on the target (admin-only) |
+| `netwkstauserenum` | Enumerate the users logged on at the target (admin-only) |
+
+Commands marked admin-only need membership in Administrators or Server
+Operators (or an `SrvsvcSessionInfo` descriptor that grants access); a
+standard domain account gets `ERROR_ACCESS_DENIED`, which the tool reports
+verbatim rather than hiding.
+
+Aliases are accepted for the common ones: `trusts`, `enumprivs`,
+`enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,
+`loggedon`, `whoami`.
 
 Type `help` in the shell for the full list, or `help <command>` for details.
 
@@ -144,6 +166,19 @@ Share    Type            Remark
 IPC$     IPC (SPECIAL)   Remote IPC
 SYSVOL   DISK            Logon server share
 Backups  DISK            Nightly backups
+
+rpcclient-ng (CORP)> lsaenumtrustdom
+Name          FlatName  SID            Direction      Type     Attributes
+----          ----      ----           ----           ----     ----
+lab.corp      LAB       S-1-5-21-...   BIDIRECTIONAL  UPLEVEL  WITHIN_FOREST
+partner.tld   PARTNER   S-1-5-21-...   INBOUND        UPLEVEL  FOREST_TRANSITIVE,QUARANTINED_DOMAIN
+
+rpcclient-ng (CORP)> netservergetinfo
+Name:         DC01
+Platform:     NT (500)
+OS version:   10.0
+Server type:  WORKSTATION,SERVER,DOMAIN_CTRL,TIME_SOURCE,NT,DFS
+Comment:
 ```
 
 ## Legal
@@ -156,7 +191,7 @@ applicable laws; the authors accept no liability for misuse.
 ## Credits
 
 Built on [`go-msrpc`](https://github.com/oiweiwei/go-msrpc) for the DCERPC,
-SAMR, LSA and srvsvc protocol stacks, and
+SAMR, LSA, srvsvc and wkssvc protocol stacks, and
 [`chzyer/readline`](https://github.com/chzyer/readline) for the interactive
 shell. Inspired by Samba's `rpcclient`
 

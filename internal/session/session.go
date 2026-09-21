@@ -20,8 +20,10 @@ import (
 	lsat "github.com/oiweiwei/go-msrpc/msrpc/lsat/lsarpc/v0"
 	samr "github.com/oiweiwei/go-msrpc/msrpc/samr/samr/v1"
 	srvsvc "github.com/oiweiwei/go-msrpc/msrpc/srvs/srvsvc/v3"
+	wkssvc "github.com/oiweiwei/go-msrpc/msrpc/wkst/wkssvc/v1"
 
 	_ "github.com/oiweiwei/go-msrpc/msrpc/erref/ntstatus"
+	_ "github.com/oiweiwei/go-msrpc/msrpc/erref/win32"
 )
 
 // LSA policy access rights.
@@ -65,6 +67,7 @@ type Session struct {
 	lsadPolicy *lsad.Handle
 
 	srvs srvsvc.SrvsvcClient
+	wkst wkssvc.WkssvcClient
 
 	dialExtra []dcerpc.Option // extra dial options (e.g. Kerberos SMB dialer)
 }
@@ -315,15 +318,23 @@ func (s *Session) ensureLSAD() error {
 	if err != nil {
 		return fmt.Errorf("bind lsad: %w", err)
 	}
-	pol, err := s.lsad.OpenPolicy2(s.ctx, &lsad.OpenPolicy2Request{
-		ObjectAttributes: &lsad.ObjectAttributes{},
-		DesiredAccess:    policyViewLocalInfo,
-	})
-	if err != nil {
-		return fmt.Errorf("open policy (lsad): %w", err)
+	// Ask for everything we are entitled to first: account-rights lookups need
+	// more than POLICY_VIEW_LOCAL_INFORMATION, and a server that refuses the
+	// broad open still answers the narrow one used by lsaquery.
+	var lastErr error
+	for _, access := range []uint32{dtyp.AccessMaskMaximumAllowed, policyViewLocalInfo} {
+		pol, err := s.lsad.OpenPolicy2(s.ctx, &lsad.OpenPolicy2Request{
+			ObjectAttributes: &lsad.ObjectAttributes{},
+			DesiredAccess:    access,
+		})
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		s.lsadPolicy = pol.Policy
+		return nil
 	}
-	s.lsadPolicy = pol.Policy
-	return nil
+	return fmt.Errorf("open policy (lsad): %w", lastErr)
 }
 
 // LSAD returns the bound LSA policy client and handle, binding on first use.
@@ -381,4 +392,36 @@ func (s *Session) SRVS() (srvsvc.SrvsvcClient, error) {
 		return nil, err
 	}
 	return s.srvs, nil
+}
+
+// ensureWKST lazily binds the Workstation Service (wkssvc) interface. Like
+// srvsvc it may refuse a sealed bind, so reuse the same fallback ladder.
+func (s *Session) ensureWKST() error {
+	if s.wkst != nil {
+		return nil
+	}
+	var lastErr error
+	for _, sec := range s.securityAttempts() {
+		cc, err := s.dial("wkssvc")
+		if err != nil {
+			lastErr = fmt.Errorf("dial wkssvc: %w", err)
+			continue
+		}
+		cli, err := wkssvc.NewWkssvcClient(s.ctx, cc, sec...)
+		if err != nil {
+			lastErr = fmt.Errorf("bind wkssvc: %w", err)
+			continue
+		}
+		s.wkst = cli
+		return nil
+	}
+	return lastErr
+}
+
+// WKST returns the bound Workstation Service client, binding on first use.
+func (s *Session) WKST() (wkssvc.WkssvcClient, error) {
+	if err := s.ensureWKST(); err != nil {
+		return nil, err
+	}
+	return s.wkst, nil
 }
