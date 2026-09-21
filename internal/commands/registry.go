@@ -85,5 +85,6 @@ func allCommands() []*Command {
 		lookupNamesCmd,
 		lookupSidsCmd,
 		ridCycleCmd,
+		sweepCmd,
 	}
 }
