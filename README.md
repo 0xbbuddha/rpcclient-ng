@@ -91,6 +91,12 @@ ticket matches), and the local clock within skew of the DC.
 
 ## Commands
 
+### Recon report
+
+| Command | Description |
+|---------|-------------|
+| `sweep` | Full recon in one command: domain info, password policy, users with risky-flag highlights (AS-REP roastable, password-not-required, delegation, descriptions), privileged group members and non-default shares. Sectioned text, or a structured object with `-json`. |
+
 ### Enumeration (SAMR)
 
 | Command | Description |
@@ -140,7 +146,20 @@ Operators (or an `SrvsvcSessionInfo` descriptor that grants access); a
 standard domain account gets `ERROR_ACCESS_DENIED`, which the tool reports
 verbatim rather than hiding.
 
-Aliases are accepted for the common ones: `trusts`, `enumprivs`,
+### Write operations (SAMR)
+
+These modify the target directory and require a privileged account; a standard
+account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
+
+| Command | Description |
+|---------|-------------|
+| `createdomuser <name>` | Create a user (created disabled and without a password) |
+| `deldomuser <rid>` | Delete a user account by RID |
+| `addgroupmem <group-rid> <user-rid>` | Add a user to a domain group (e.g. RID 512 = Domain Admins) |
+| `delgroupmem <group-rid> <user-rid>` | Remove a user from a domain group |
+| `addaliasmem <alias-rid> <member-sid>` | Add a member by SID to an alias/local group (e.g. Builtin Administrators) |
+
+Aliases are accepted for the common ones: `audit`, `trusts`, `enumprivs`,
 `enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,
 `loggedon`, `whoami`.
 
