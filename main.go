@@ -20,6 +20,8 @@ func main() {
 		hash    = flag.String("H", "", "NT hash for pass-the-hash (LM:NT or NT)")
 		domain  = flag.String("d", "", "domain (NetBIOS or FQDN)")
 		kerb    = flag.Bool("k", false, "use Kerberos auth from ccache (KRB5CCNAME); target must be the FQDN")
+		null    = flag.Bool("N", false, "null session (anonymous, no credentials)")
+		dcIP    = flag.String("dc-ip", "", "IP/host to connect to (keeps <target> as the Kerberos SPN name)")
 		noSeal  = flag.Bool("no-seal", false, "disable packet privacy (sealing)")
 		asJSON  = flag.Bool("json", false, "emit output as JSON")
 		oneShot = flag.String("c", "", "run a single command then exit")
@@ -37,13 +39,15 @@ func main() {
 	target := flag.Arg(0)
 
 	cfg := session.Config{
-		Target:   target,
-		Username: *user,
-		Password: *pass,
-		NTHash:   normalizeHash(*hash),
-		Domain:   *domain,
-		Seal:     !*noSeal,
-		Kerberos: *kerb,
+		Target:      target,
+		Username:    *user,
+		Password:    *pass,
+		NTHash:      normalizeHash(*hash),
+		Domain:      *domain,
+		Seal:        !*noSeal,
+		Kerberos:    *kerb,
+		NullSession: *null,
+		DCIP:        *dcIP,
 	}
 
 	out := output.New(*asJSON)
