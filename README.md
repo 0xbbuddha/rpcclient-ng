@@ -17,12 +17,13 @@ at the first `NT_STATUS_ACCESS_DENIED`.
 ## Highlights
 
 - **Single static binary**: no Python, no Samba, cross-compiles to Linux, Windows and macOS.
+- **One-shot recon report**: `sweep` gathers domain, users, privileged group members and shares in a single command, and highlights the risky accounts (AS-REP roastable, password-not-required, delegation, descriptions).
 - **Automatic fallbacks**: `enumdomusers` transparently switches to LSAT RID cycling when SAMR enumeration is denied.
 - **Enriched output**: account-control flags are decoded to readable tags (`DISABLED`, `AS-REP_ROASTABLE`, `PWD_NEVER_EXPIRES`, `TRUSTED_FOR_DELEG`, ...) instead of raw hex.
-- **Multiple RPC interfaces**: SAMR, LSAT, LSA policy, Server Service and Workstation Service in one shell.
+- **Recon and abuse**: enumerate across SAMR, LSAT, LSA policy, Server and Workstation Service, then act with SAMR write operations (create/delete users, group membership).
 - **Interactive shell** with tab-completion, plus a one-shot mode for scripting.
 - **Table or JSON output** for piping into other tooling.
-- **Modern authentication**: password, pass-the-hash and Kerberos from a ccache.
+- **Modern authentication**: password, pass-the-hash, Kerberos from a ccache, and null sessions.
 
 ## Installation
 
