@@ -181,6 +181,43 @@ func resolveMemberSID(s *session.Session, arg string) (*dtyp.SID, error) {
 	return nil, fmt.Errorf("could not resolve member %q to a SID", arg)
 }
 
+// ridInDomain returns the trailing RID of sid when sid is a direct child of
+// dsid (same identifier authority and sub-authority prefix, one extra element).
+func ridInDomain(sid, dsid *dtyp.SID) (uint32, bool) {
+	if sid == nil || dsid == nil || len(sid.SubAuthority) != len(dsid.SubAuthority)+1 {
+		return 0, false
+	}
+	for i := range dsid.SubAuthority {
+		if sid.SubAuthority[i] != dsid.SubAuthority[i] {
+			return 0, false
+		}
+	}
+	return sid.SubAuthority[len(sid.SubAuthority)-1], true
+}
+
+// resolveRID turns an account reference into a RID in the current domain. It
+// accepts a bare RID or an account name (resolved via LSAT). A name that maps
+// to a SID outside the current domain is rejected, since group and user RIDs
+// are domain-relative.
+func resolveRID(s *session.Session, arg string) (uint32, error) {
+	if rid, err := strconv.ParseUint(arg, 10, 32); err == nil {
+		return uint32(rid), nil
+	}
+	sid, err := resolveMemberSID(s, arg)
+	if err != nil {
+		return 0, err
+	}
+	dsid, ok := currentDomainSID(s)
+	if !ok {
+		return 0, fmt.Errorf("no domain selected to resolve %q", arg)
+	}
+	rid, ok := ridInDomain(sid, dsid)
+	if !ok {
+		return 0, fmt.Errorf("%q (%s) is not in the current domain %s", arg, sid.String(), dsid.String())
+	}
+	return rid, nil
+}
+
 func domainSID(refs *lsat.ReferencedDomainList, idx int32) *dtyp.SID {
 	if refs == nil || idx < 0 || int(idx) >= len(refs.Domains) {
 		return nil

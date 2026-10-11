@@ -61,7 +61,7 @@ func main() {
 	out.Infof("connected to %s (domain: %s)", target, sess.CurrentDomain())
 
 	if *oneShot != "" {
-		if fields := strings.Fields(*oneShot); len(fields) > 0 {
+		if fields := shell.Tokenize(*oneShot); len(fields) > 0 {
 			if err := shell.RunCommand(sess, out, fields[0], fields[1:]); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
