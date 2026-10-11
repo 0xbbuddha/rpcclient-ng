@@ -18,6 +18,7 @@ const (
 	prefMaxLengthAll = 0xffffffff
 	sessEnumLevel502 = 502
 	sessEnumLevel10  = 10
+	sessEnumLevel1   = 1
 	wkstaEnumLevel1  = 1
 	wkstaEnumLevel0  = 0
 )
@@ -90,6 +91,39 @@ var netSessEnumCmd = &Command{
 			}
 		}
 		firstErr := err
+
+		// Level 1 is the most broadly implemented: Samba supports it even when
+		// it rejects 502/10 with ERROR_INVALID_LEVEL, and it still carries the
+		// user, client, open count and logon flags.
+		resp1, err := cli.SessionEnum(s.Context(), &srvsvc.SessionEnumRequest{
+			Info: &srvsvc.SessionEnum{
+				Level: sessEnumLevel1,
+				SessionInfo: &srvsvc.SessionEnumUnion{
+					Value: &srvsvc.SessionEnumUnion_Level1{Level1: &srvsvc.SessionInfo1Container{}},
+				},
+			},
+			PreferredMaximumLength: prefMaxLengthAll,
+		})
+		if err == nil && resp1.Info != nil && resp1.Info.SessionInfo != nil {
+			if c, ok := resp1.Info.SessionInfo.GetValue().(*srvsvc.SessionInfo1Container); ok {
+				rows := make([][]string, 0, len(c.Buffer))
+				for _, se := range c.Buffer {
+					if se == nil {
+						continue
+					}
+					rows = append(rows, []string{
+						se.ClientName,
+						se.UserName,
+						fmt.Sprint(se.NumOpens),
+						secs(se.Time),
+						secs(se.IdleTime),
+						decodeSessFlags(se.UserFlags),
+					})
+				}
+				out.Table([]string{"Client", "User", "Opens", "Active", "Idle", "Flags"}, rows)
+				return nil
+			}
+		}
 
 		resp10, err := cli.SessionEnum(s.Context(), &srvsvc.SessionEnumRequest{
 			Info: &srvsvc.SessionEnum{

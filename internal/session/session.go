@@ -211,8 +211,12 @@ func (s *Session) loadDomains() error {
 		if err != nil {
 			return fmt.Errorf("enumerate domains: %w", err)
 		}
-		for _, d := range resp.Buffer.Buffer {
-			names = append(names, d.Name.Buffer)
+		// The final iteration (end of enumeration) can return a nil Buffer
+		// alongside CountReturned == 0; guard before ranging over it.
+		if resp.Buffer != nil {
+			for _, d := range resp.Buffer.Buffer {
+				names = append(names, d.Name.Buffer)
+			}
 		}
 		if enum = resp.EnumerationContext; enum == 0 || resp.CountReturned == 0 {
 			break
