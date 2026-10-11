@@ -159,8 +159,8 @@ account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
 | `deldomuser <rid>` | Delete a user account by RID |
 | `addgroupmem <group-rid> <user-rid>` | Add a user to a domain group (e.g. RID 512 = Domain Admins) |
 | `delgroupmem <group-rid> <user-rid>` | Remove a user from a domain group |
-| `addaliasmem <alias-rid> <member-sid>` | Add a member by SID to an alias/local group (e.g. Builtin Administrators) |
-| `delaliasmem <alias-rid> <member-sid>` | Remove a member by SID from an alias/local group |
+| `addaliasmem <alias-rid> <member>` | Add a member to an alias/local group (e.g. Builtin Administrators). `<member>` is a full SID, a bare RID (expanded against the current domain), or an account name |
+| `delaliasmem <alias-rid> <member>` | Remove a member from an alias/local group (same `<member>` forms as above) |
 
 Aliases are accepted for the common ones: `audit`, `trusts`, `enumprivs`,
 `enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,
