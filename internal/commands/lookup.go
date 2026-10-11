@@ -138,6 +138,49 @@ var lookupNamesCmd = &Command{
 	},
 }
 
+// resolveMemberSID turns a member reference into a full SID. It accepts a SID
+// ("S-1-5-..."), a bare RID (expanded against the current domain SID), or an
+// account name (resolved via LSAT). A name is the safest form for aliases that
+// hold members from another domain (e.g. a domain user in BUILTIN\Administrators),
+// since a bare RID is expanded against whichever domain is currently selected.
+func resolveMemberSID(s *session.Session, arg string) (*dtyp.SID, error) {
+	if strings.HasPrefix(arg, "S-1-") {
+		sid, err := dtyp.ParseSID(arg)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sid %q: %w", arg, err)
+		}
+		return sid, nil
+	}
+	if rid, err := strconv.ParseUint(arg, 10, 32); err == nil {
+		dsid, ok := currentDomainSID(s)
+		if !ok {
+			return nil, fmt.Errorf("no domain selected to expand RID %s", arg)
+		}
+		return dsid.AddRelativeID(uint32(rid)), nil
+	}
+	cli, pol, err := s.LSAT()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.LookupNames(s.Context(), &lsat.LookupNamesRequest{
+		Policy:      pol,
+		Count:       1,
+		Names:       []*dtyp.UnicodeString{{Buffer: arg}},
+		LookupLevel: lsat.LookupLevelWorkstation,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolve name %q: %w", arg, err)
+	}
+	if resp.TranslatedSIDs != nil && len(resp.TranslatedSIDs.SIDs) > 0 {
+		if ts := resp.TranslatedSIDs.SIDs[0]; ts != nil && ts.Use != lsat.SIDNameUseTypeUnknown {
+			if dsid := domainSID(resp.ReferencedDomains, ts.DomainIndex); dsid != nil {
+				return dsid.AddRelativeID(ts.RelativeID), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("could not resolve member %q to a SID", arg)
+}
+
 func domainSID(refs *lsat.ReferencedDomainList, idx int32) *dtyp.SID {
 	if refs == nil || idx < 0 || int(idx) >= len(refs.Domains) {
 		return nil

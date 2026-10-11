@@ -168,19 +168,19 @@ func openAlias(s *session.Session, aliasRID uint32, access uint32) (*samr.Handle
 
 var addAliasMemCmd = &Command{
 	Name:  "addaliasmem",
-	Usage: "addaliasmem <alias-rid> <member-sid>",
-	Help:  "Add a member (by full SID) to an alias/local group, e.g. Builtin Administrators.",
+	Usage: "addaliasmem <alias-rid> <member-sid|rid|name>",
+	Help:  "Add a member to an alias/local group (e.g. Builtin Administrators). The member may be a full SID, a bare RID (expanded against the current domain), or an account name.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 2 {
-			return fmt.Errorf("usage: addaliasmem <alias-rid> <member-sid>")
+			return fmt.Errorf("usage: addaliasmem <alias-rid> <member-sid|rid|name>")
 		}
 		aliasRID, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid alias rid %q", args[0])
 		}
-		memberSID, err := dtyp.ParseSID(args[1])
+		memberSID, err := resolveMemberSID(s, args[1])
 		if err != nil {
-			return fmt.Errorf("invalid member sid %q: %w", args[1], err)
+			return err
 		}
 		ah, err := openAlias(s, uint32(aliasRID), dtyp.AccessMaskMaximumAllowed)
 		if err != nil {
@@ -199,19 +199,19 @@ var addAliasMemCmd = &Command{
 
 var delAliasMemCmd = &Command{
 	Name:  "delaliasmem",
-	Usage: "delaliasmem <alias-rid> <member-sid>",
-	Help:  "Remove a member (by full SID) from an alias/local group.",
+	Usage: "delaliasmem <alias-rid> <member-sid|rid|name>",
+	Help:  "Remove a member from an alias/local group. The member may be a full SID, a bare RID (expanded against the current domain), or an account name.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 2 {
-			return fmt.Errorf("usage: delaliasmem <alias-rid> <member-sid>")
+			return fmt.Errorf("usage: delaliasmem <alias-rid> <member-sid|rid|name>")
 		}
 		aliasRID, err := strconv.ParseUint(args[0], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid alias rid %q", args[0])
 		}
-		memberSID, err := dtyp.ParseSID(args[1])
+		memberSID, err := resolveMemberSID(s, args[1])
 		if err != nil {
-			return fmt.Errorf("invalid member sid %q: %w", args[1], err)
+			return err
 		}
 		ah, err := openAlias(s, uint32(aliasRID), dtyp.AccessMaskMaximumAllowed)
 		if err != nil {
