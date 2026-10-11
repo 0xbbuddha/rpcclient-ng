@@ -147,6 +147,25 @@ var delGroupMemCmd = &Command{
 	},
 }
 
+// openAlias opens an alias (local group) by RID in the current domain. Aliases
+// for the well-known builtins (e.g. Administrators, RID 544) live in the
+// BUILTIN domain, so `use BUILTIN` must precede the call for those.
+func openAlias(s *session.Session, aliasRID uint32, access uint32) (*samr.Handle, error) {
+	h, _, err := s.OpenCurrentDomain()
+	if err != nil {
+		return nil, err
+	}
+	open, err := s.Samr().OpenAlias(s.Context(), &samr.OpenAliasRequest{
+		Domain:        h,
+		DesiredAccess: access,
+		AliasID:       aliasRID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open alias %d: %w", aliasRID, err)
+	}
+	return open.AliasHandle, nil
+}
+
 var addAliasMemCmd = &Command{
 	Name:  "addaliasmem",
 	Usage: "addaliasmem <alias-rid> <member-sid>",
@@ -163,25 +182,48 @@ var addAliasMemCmd = &Command{
 		if err != nil {
 			return fmt.Errorf("invalid member sid %q: %w", args[1], err)
 		}
-		h, _, err := s.OpenCurrentDomain()
+		ah, err := openAlias(s, uint32(aliasRID), dtyp.AccessMaskMaximumAllowed)
 		if err != nil {
 			return err
 		}
-		open, err := s.Samr().OpenAlias(s.Context(), &samr.OpenAliasRequest{
-			Domain:        h,
-			DesiredAccess: dtyp.AccessMaskMaximumAllowed,
-			AliasID:       uint32(aliasRID),
-		})
-		if err != nil {
-			return fmt.Errorf("open alias %d: %w", aliasRID, err)
-		}
 		if _, err := s.Samr().AddMemberToAlias(s.Context(), &samr.AddMemberToAliasRequest{
-			AliasHandle: open.AliasHandle,
+			AliasHandle: ah,
 			MemberID:    memberSID,
 		}); err != nil {
 			return fmt.Errorf("add alias member: %w", err)
 		}
 		out.Infof("added %s to alias RID %d", memberSID.String(), aliasRID)
+		return nil
+	},
+}
+
+var delAliasMemCmd = &Command{
+	Name:  "delaliasmem",
+	Usage: "delaliasmem <alias-rid> <member-sid>",
+	Help:  "Remove a member (by full SID) from an alias/local group.",
+	Run: func(s *session.Session, out *output.Printer, args []string) error {
+		if len(args) != 2 {
+			return fmt.Errorf("usage: delaliasmem <alias-rid> <member-sid>")
+		}
+		aliasRID, err := strconv.ParseUint(args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid alias rid %q", args[0])
+		}
+		memberSID, err := dtyp.ParseSID(args[1])
+		if err != nil {
+			return fmt.Errorf("invalid member sid %q: %w", args[1], err)
+		}
+		ah, err := openAlias(s, uint32(aliasRID), dtyp.AccessMaskMaximumAllowed)
+		if err != nil {
+			return err
+		}
+		if _, err := s.Samr().RemoveMemberFromAlias(s.Context(), &samr.RemoveMemberFromAliasRequest{
+			AliasHandle: ah,
+			MemberID:    memberSID,
+		}); err != nil {
+			return fmt.Errorf("remove alias member: %w", err)
+		}
+		out.Infof("removed %s from alias RID %d", memberSID.String(), aliasRID)
 		return nil
 	},
 }

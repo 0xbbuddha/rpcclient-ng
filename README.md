@@ -111,6 +111,7 @@ ticket matches), and the local clock within skew of the DC.
 | `queryuser <rid\|name>` | Show general information and flags for a user |
 | `queryusergroups <rid>` | List the groups a user is a member of |
 | `querygroupmem <rid>` | List the members of a group |
+| `queryaliasmem <rid>` | List the members of an alias/local group (full SIDs, resolved to names) |
 | `getdompwinfo` | Show the domain password policy |
 
 ### Translation (LSAT)
@@ -159,10 +160,11 @@ account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
 | `addgroupmem <group-rid> <user-rid>` | Add a user to a domain group (e.g. RID 512 = Domain Admins) |
 | `delgroupmem <group-rid> <user-rid>` | Remove a user from a domain group |
 | `addaliasmem <alias-rid> <member-sid>` | Add a member by SID to an alias/local group (e.g. Builtin Administrators) |
+| `delaliasmem <alias-rid> <member-sid>` | Remove a member by SID from an alias/local group |
 
 Aliases are accepted for the common ones: `audit`, `trusts`, `enumprivs`,
 `enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,
-`loggedon`, `whoami`.
+`loggedon`, `aliasmem`, `whoami`.
 
 Type `help` in the shell for the full list, or `help <command>` for details.
 

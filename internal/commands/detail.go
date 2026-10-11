@@ -206,6 +206,67 @@ var queryGroupMemCmd = &Command{
 	},
 }
 
+var queryAliasMemCmd = &Command{
+	Name:    "queryaliasmem",
+	Aliases: []string{"aliasmem"},
+	Usage:   "queryaliasmem <rid>",
+	Help:    "List the members (full SID, resolved name) of an alias/local group.",
+	Run: func(s *session.Session, out *output.Printer, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("usage: queryaliasmem <rid>")
+		}
+		rid, err := strconv.ParseUint(args[0], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid rid %q", args[0])
+		}
+		ah, err := openAlias(s, uint32(rid), samrRead)
+		if err != nil {
+			return err
+		}
+		mem, err := s.Samr().GetMembersInAlias(s.Context(), &samr.GetMembersInAliasRequest{
+			AliasHandle: ah,
+		})
+		if err != nil {
+			return fmt.Errorf("get alias members: %w", err)
+		}
+		var sids []*dtyp.SID
+		if mem.Members != nil {
+			for _, si := range mem.Members.SIDs {
+				if si != nil && si.SIDPointer != nil {
+					sids = append(sids, si.SIDPointer)
+				}
+			}
+		}
+		// Alias members are SIDs (possibly from other domains), so resolve them
+		// via LSAT rather than SAMR RID lookup.
+		names := make([]string, len(sids))
+		if len(sids) > 0 {
+			resp, err := resolveSIDs(s, sids)
+			if err != nil {
+				return err
+			}
+			for i := range sids {
+				if resp != nil && resp.TranslatedNames != nil && i < len(resp.TranslatedNames.Names) {
+					tn := resp.TranslatedNames.Names[i]
+					if tn != nil && tn.Name != nil && tn.Name.Buffer != "" {
+						names[i] = qualify(domainName(resp.ReferencedDomains, tn.DomainIndex), tn.Name.Buffer)
+					}
+				}
+			}
+		}
+		rows := make([][]string, 0, len(sids))
+		for i, sid := range sids {
+			name := names[i]
+			if name == "" {
+				name = "<unmapped>"
+			}
+			rows = append(rows, []string{sid.String(), name})
+		}
+		out.Table([]string{"SID", "Member"}, rows)
+		return nil
+	},
+}
+
 var queryUserGroupsCmd = &Command{
 	Name:  "queryusergroups",
 	Usage: "queryusergroups <rid>",

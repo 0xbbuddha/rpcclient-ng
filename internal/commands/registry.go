@@ -70,6 +70,7 @@ func allCommands() []*Command {
 		queryUserCmd,
 		queryUserGroupsCmd,
 		queryGroupMemCmd,
+		queryAliasMemCmd,
 		getDomPwInfoCmd,
 		lsaQueryCmd,
 		getUserNameCmd,
@@ -91,5 +92,6 @@ func allCommands() []*Command {
 		addGroupMemCmd,
 		delGroupMemCmd,
 		addAliasMemCmd,
+		delAliasMemCmd,
 	}
 }
