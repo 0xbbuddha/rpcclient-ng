@@ -34,6 +34,42 @@ func RunCommand(sess *session.Session, out *output.Printer, name string, args []
 	return cmd.Run(sess, out, args)
 }
 
+// Tokenize splits a command line into fields, honoring single and double quotes
+// so an argument like 'Domain Admins' survives as one token. It is used both by
+// the interactive shell and the -c one-shot parser.
+func Tokenize(line string) []string {
+	var tokens []string
+	var buf strings.Builder
+	inToken := false
+	var quote rune // 0 when outside a quote, else the opening quote char
+	for _, r := range line {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				buf.WriteRune(r)
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			inToken = true
+		case r == ' ' || r == '\t':
+			if inToken {
+				tokens = append(tokens, buf.String())
+				buf.Reset()
+				inToken = false
+			}
+		default:
+			buf.WriteRune(r)
+			inToken = true
+		}
+	}
+	if inToken {
+		tokens = append(tokens, buf.String())
+	}
+	return tokens
+}
+
 func (sh *Shell) completer() *readline.PrefixCompleter {
 	items := make([]readline.PrefixCompleterInterface, 0)
 	for _, name := range sh.reg.Names() {
@@ -77,7 +113,7 @@ func (sh *Shell) Run() error {
 			return err
 		}
 
-		fields := strings.Fields(line)
+		fields := Tokenize(line)
 		if len(fields) == 0 {
 			continue
 		}

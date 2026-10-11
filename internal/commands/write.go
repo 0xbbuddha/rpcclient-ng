@@ -49,15 +49,15 @@ var createDomUserCmd = &Command{
 
 var delDomUserCmd = &Command{
 	Name:  "deldomuser",
-	Usage: "deldomuser <rid>",
-	Help:  "Delete a user account by RID.",
+	Usage: "deldomuser <rid|name>",
+	Help:  "Delete a user account, given its RID or account name.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("usage: deldomuser <rid>")
+			return fmt.Errorf("usage: deldomuser <rid|name>")
 		}
-		rid, err := strconv.ParseUint(args[0], 10, 32)
+		rid, err := resolveRID(s, args[0])
 		if err != nil {
-			return fmt.Errorf("invalid rid %q", args[0])
+			return err
 		}
 		h, _, err := s.OpenCurrentDomain()
 		if err != nil {
@@ -100,10 +100,10 @@ func openGroupForWrite(s *session.Session, groupRID uint32) (*samr.Handle, error
 
 var addGroupMemCmd = &Command{
 	Name:  "addgroupmem",
-	Usage: "addgroupmem <group-rid> <user-rid>",
-	Help:  "Add a user (by RID) to a domain group (by RID).",
+	Usage: "addgroupmem <group-rid|name> <user-rid|name>",
+	Help:  "Add a user to a domain group. Both the group and the user may be given as a RID or an account name (resolved in the current domain).",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
-		groupRID, userRID, err := twoRIDs(args)
+		groupRID, userRID, err := twoAccountRIDs(s, args)
 		if err != nil {
 			return err
 		}
@@ -125,10 +125,10 @@ var addGroupMemCmd = &Command{
 
 var delGroupMemCmd = &Command{
 	Name:  "delgroupmem",
-	Usage: "delgroupmem <group-rid> <user-rid>",
-	Help:  "Remove a user (by RID) from a domain group (by RID).",
+	Usage: "delgroupmem <group-rid|name> <user-rid|name>",
+	Help:  "Remove a user from a domain group. Both the group and the user may be given as a RID or an account name (resolved in the current domain).",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
-		groupRID, userRID, err := twoRIDs(args)
+		groupRID, userRID, err := twoAccountRIDs(s, args)
 		if err != nil {
 			return err
 		}
@@ -228,17 +228,19 @@ var delAliasMemCmd = &Command{
 	},
 }
 
-func twoRIDs(args []string) (uint32, uint32, error) {
+// twoAccountRIDs resolves a <group> <user> pair, each given as a RID or an
+// account name, to their RIDs in the current domain.
+func twoAccountRIDs(s *session.Session, args []string) (uint32, uint32, error) {
 	if len(args) != 2 {
-		return 0, 0, fmt.Errorf("usage: <group-rid> <user-rid>")
+		return 0, 0, fmt.Errorf("usage: <group-rid|name> <user-rid|name>")
 	}
-	g, err := strconv.ParseUint(args[0], 10, 32)
+	g, err := resolveRID(s, args[0])
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid group rid %q", args[0])
+		return 0, 0, fmt.Errorf("group %q: %w", args[0], err)
 	}
-	u, err := strconv.ParseUint(args[1], 10, 32)
+	u, err := resolveRID(s, args[1])
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid user rid %q", args[1])
+		return 0, 0, fmt.Errorf("user %q: %w", args[1], err)
 	}
-	return uint32(g), uint32(u), nil
+	return g, u, nil
 }

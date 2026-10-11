@@ -156,11 +156,15 @@ account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
 | Command | Description |
 |---------|-------------|
 | `createdomuser <name>` | Create a user (created disabled and without a password) |
-| `deldomuser <rid>` | Delete a user account by RID |
-| `addgroupmem <group-rid> <user-rid>` | Add a user to a domain group (e.g. RID 512 = Domain Admins) |
-| `delgroupmem <group-rid> <user-rid>` | Remove a user from a domain group |
+| `deldomuser <rid\|name>` | Delete a user account, given its RID or account name |
+| `addgroupmem <group> <user>` | Add a user to a domain group (e.g. RID 512 = Domain Admins); group and user may each be a RID or a name |
+| `delgroupmem <group> <user>` | Remove a user from a domain group; group and user may each be a RID or a name |
 | `addaliasmem <alias-rid> <member>` | Add a member to an alias/local group (e.g. Builtin Administrators). `<member>` is a full SID, a bare RID (expanded against the current domain), or an account name |
 | `delaliasmem <alias-rid> <member>` | Remove a member from an alias/local group (same `<member>` forms as above) |
+
+Where a command takes a name, a name containing spaces must be quoted, e.g.
+`addgroupmem 'Domain Admins' j.doe`; single and double quotes work in both the
+interactive shell and the `-c` one-shot.
 
 Aliases are accepted for the common ones: `audit`, `trusts`, `enumprivs`,
 `enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,
