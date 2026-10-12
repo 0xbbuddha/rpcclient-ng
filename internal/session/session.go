@@ -88,6 +88,20 @@ func (s *Session) Samr() samr.SamrClient { return s.samr }
 // Context returns the security context.
 func (s *Session) Context() context.Context { return s.ctx }
 
+// SessionKey returns the authentication session key negotiated during the bind,
+// used to encrypt SAMR password buffers. It is populated for NTLM (password or
+// pass-the-hash); Kerberos and null sessions do not expose one.
+func (s *Session) SessionKey() ([]byte, error) {
+	for _, attr := range []string{gssapi.AttributeSMBSessionKey, gssapi.AttributeSessionKey} {
+		if v, ok := gssapi.GetAttribute(s.ctx, attr); ok {
+			if key, ok := v.([]byte); ok && len(key) > 0 {
+				return key, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no session key available (password encryption needs NTLM auth; not supported for Kerberos or null sessions)")
+}
+
 // Connect authenticates and binds the SAMR interface.
 func (s *Session) Connect() error {
 	gssapi.AddMechanism(ssp.SPNEGO)
