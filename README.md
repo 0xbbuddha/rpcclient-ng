@@ -157,6 +157,9 @@ account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
 |---------|-------------|
 | `createdomuser <name>` | Create a user (created disabled and without a password) |
 | `deldomuser <rid\|name>` | Delete a user account, given its RID or account name |
+| `enabledomuser <rid\|name>` | Enable an account (clears the `ACB_DISABLED` flag) |
+| `disabledomuser <rid\|name>` | Disable an account (sets the `ACB_DISABLED` flag) |
+| `setuserpass <rid\|name> <password>` | Reset a user's password (SAMR `SetInformationUser2`). See the note below |
 | `addgroupmem <group> <user>` | Add a user to a domain group (e.g. RID 512 = Domain Admins); group and user may each be a RID or a name |
 | `delgroupmem <group> <user>` | Remove a user from a domain group; group and user may each be a RID or a name |
 | `addaliasmem <alias-rid> <member>` | Add a member to an alias/local group (e.g. Builtin Administrators). `<member>` is a full SID, a bare RID (expanded against the current domain), or an account name |
@@ -165,6 +168,13 @@ account gets `ACCESS_DENIED`. Use them only within your authorized engagement.
 Where a command takes a name, a name containing spaces must be quoted, e.g.
 `addgroupmem 'Domain Admins' j.doe`; single and double quotes work in both the
 interactive shell and the `-c` one-shot.
+
+A typical account-takeover chain is `createdomuser`, `setuserpass`,
+`enabledomuser`, then add to a privileged group. **`setuserpass` caveat:** it
+encrypts the password buffer with the connection's session key and works against
+Windows DCs, but Samba rejects it over the sealed RPC connection this client
+uses (Samba wants an unsealed, SMB-authenticated bind, which go-msrpc does not
+expose). `createdomuser`/`enabledomuser`/`disabledomuser` work everywhere.
 
 Aliases are accepted for the common ones: `audit`, `trusts`, `enumprivs`,
 `enumaccounts`, `acctrights`, `serverinfo`, `wkstainfo`, `shares`, `sessions`,

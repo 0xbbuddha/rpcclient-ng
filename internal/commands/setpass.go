@@ -6,6 +6,7 @@ import (
 	"crypto/rc4"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"unicode/utf16"
 
 	"github.com/0xbbuddha/rpcclient-ng/internal/output"
@@ -107,7 +108,7 @@ var setUserPassCmd = &Command{
 	Name:    "setuserpass",
 	Aliases: []string{"setpassword", "chgpasswd"},
 	Usage:   "setuserpass <rid|name> <password>",
-	Help:    "Set (reset) a user's password via SAMR SetInformationUser2, trying the salted buffer (level 26) then the plain one (level 24). Requires NTLM auth and a privileged account.",
+	Help:    "Set (reset) a user's password via SAMR SetInformationUser2, trying the salted buffer (level 26) then the plain one (level 24). Requires NTLM auth and a privileged account. Works against Windows DCs; Samba rejects it over a sealed connection.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("usage: setuserpass <rid|name> <password>")
@@ -158,11 +159,35 @@ var setUserPassCmd = &Command{
 			}},
 		})
 		if errOld != nil {
-			return fmt.Errorf("set password (level 26: %v; level 24: %w)", errNew, errOld)
+			return setPassError(errNew, errOld)
 		}
 		out.Infof("password set for RID %d (level 24)", rid)
 		return nil
 	},
+}
+
+// setPassError wraps the two SetInformationUser2 failures. STATUS_WRONG_PASSWORD
+// and STATUS_NO_USER_SESSION_KEY here are the signature of a server (notably
+// Samba) that rejects the password buffer over a sealed RPC connection: the key
+// it expects does not match the one carried on this bind. This operation is
+// known to work against Windows DCs but not against Samba over a sealed bind.
+func setPassError(errNew, errOld error) error {
+	hint := ""
+	if containsAny(errNew.Error(), "WRONG_PASSWORD", "NO_USER_SESSION_KEY") ||
+		containsAny(errOld.Error(), "WRONG_PASSWORD", "NO_USER_SESSION_KEY") {
+		hint = "\n  [!] the server rejected the encrypted password buffer on this sealed connection; " +
+			"this path works against Windows DCs but not Samba (which needs an unsealed, SMB-authenticated bind)"
+	}
+	return fmt.Errorf("set password failed (level 26: %v; level 24: %v)%s", errNew, errOld, hint)
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // setAccountDisabled toggles the ACB_DISABLED bit, preserving the other
