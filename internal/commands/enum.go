@@ -103,8 +103,9 @@ var enumDomUsersCmd = &Command{
 		}
 		entries, err := enumEntries(s, func(enum uint32) ([]*samr.RIDEnumeration, uint32, uint32, error) {
 			resp, err := s.Samr().EnumerateUsersInDomain(s.Context(), &samr.EnumerateUsersInDomainRequest{
-				Domain:             h,
-				EnumerationContext: enum,
+				Domain:                 h,
+				EnumerationContext:     enum,
+				PreferredMaximumLength: 0xffffffff,
 			})
 			if err != nil {
 				return nil, 0, 0, err
@@ -157,8 +158,9 @@ var enumDomGroupsCmd = &Command{
 		}
 		entries, err := enumEntries(s, func(enum uint32) ([]*samr.RIDEnumeration, uint32, uint32, error) {
 			resp, err := s.Samr().EnumerateGroupsInDomain(s.Context(), &samr.EnumerateGroupsInDomainRequest{
-				Domain:             h,
-				EnumerationContext: enum,
+				Domain:                 h,
+				EnumerationContext:     enum,
+				PreferredMaximumLength: 0xffffffff,
 			})
 			if err != nil {
 				return nil, 0, 0, err
@@ -185,8 +187,9 @@ var enumDomAliasesCmd = &Command{
 		}
 		entries, err := enumEntries(s, func(enum uint32) ([]*samr.RIDEnumeration, uint32, uint32, error) {
 			resp, err := s.Samr().EnumerateAliasesInDomain(s.Context(), &samr.EnumerateAliasesInDomainRequest{
-				Domain:             h,
-				EnumerationContext: enum,
+				Domain:                 h,
+				EnumerationContext:     enum,
+				PreferredMaximumLength: 0xffffffff,
 			})
 			if err != nil {
 				return nil, 0, 0, err
