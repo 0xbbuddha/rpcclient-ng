@@ -161,24 +161,24 @@ func resolveRIDs(s *session.Session, domainH *samr.Handle, rids []uint32) (map[u
 
 var queryGroupMemCmd = &Command{
 	Name:  "querygroupmem",
-	Usage: "querygroupmem <rid>",
+	Usage: "querygroupmem <rid|name>",
 	Help:  "List the members (RID and name) of a group.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("usage: querygroupmem <rid>")
-		}
-		rid, err := strconv.ParseUint(args[0], 10, 32)
-		if err != nil {
-			return fmt.Errorf("invalid rid %q", args[0])
+			return fmt.Errorf("usage: querygroupmem <rid|name>")
 		}
 		h, _, err := s.OpenCurrentDomain()
+		if err != nil {
+			return err
+		}
+		rid, err := resolvePrincipalRID(s, h, args[0])
 		if err != nil {
 			return err
 		}
 		open, err := s.Samr().OpenGroup(s.Context(), &samr.OpenGroupRequest{
 			Domain:        h,
 			DesiredAccess: samrRead,
-			GroupID:       uint32(rid),
+			GroupID:       rid,
 		})
 		if err != nil {
 			return fmt.Errorf("open group %d: %w", rid, err)
@@ -209,17 +209,21 @@ var queryGroupMemCmd = &Command{
 var queryAliasMemCmd = &Command{
 	Name:    "queryaliasmem",
 	Aliases: []string{"aliasmem"},
-	Usage:   "queryaliasmem <rid>",
+	Usage:   "queryaliasmem <rid|name>",
 	Help:    "List the members (full SID, resolved name) of an alias/local group.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("usage: queryaliasmem <rid>")
+			return fmt.Errorf("usage: queryaliasmem <rid|name>")
 		}
-		rid, err := strconv.ParseUint(args[0], 10, 32)
+		h, _, err := s.OpenCurrentDomain()
 		if err != nil {
-			return fmt.Errorf("invalid rid %q", args[0])
+			return err
 		}
-		ah, err := openAlias(s, uint32(rid), samrRead)
+		rid, err := resolvePrincipalRID(s, h, args[0])
+		if err != nil {
+			return err
+		}
+		ah, err := openAlias(s, rid, samrRead)
 		if err != nil {
 			return err
 		}
@@ -269,24 +273,24 @@ var queryAliasMemCmd = &Command{
 
 var queryUserGroupsCmd = &Command{
 	Name:  "queryusergroups",
-	Usage: "queryusergroups <rid>",
+	Usage: "queryusergroups <rid|name>",
 	Help:  "List the groups a user is a member of.",
 	Run: func(s *session.Session, out *output.Printer, args []string) error {
 		if len(args) != 1 {
-			return fmt.Errorf("usage: queryusergroups <rid>")
-		}
-		rid, err := strconv.ParseUint(args[0], 10, 32)
-		if err != nil {
-			return fmt.Errorf("invalid rid %q", args[0])
+			return fmt.Errorf("usage: queryusergroups <rid|name>")
 		}
 		h, _, err := s.OpenCurrentDomain()
+		if err != nil {
+			return err
+		}
+		rid, err := resolvePrincipalRID(s, h, args[0])
 		if err != nil {
 			return err
 		}
 		open, err := s.Samr().OpenUser(s.Context(), &samr.OpenUserRequest{
 			Domain:        h,
 			DesiredAccess: samrRead,
-			UserID:        uint32(rid),
+			UserID:        rid,
 		})
 		if err != nil {
 			return fmt.Errorf("open user %d: %w", rid, err)
