@@ -166,6 +166,26 @@ func (s *Session) dial(pipe string) (dcerpc.Conn, error) {
 	return dcerpc.Dial(s.ctx, s.dialHost(), opts...)
 }
 
+// BindPipe dials the named pipe and binds a client through newClient, trying the
+// session's security ladder (sealed then insecure). It lets commands reach MS-RPC
+// interfaces the session does not wrap itself (e.g. the coercion vectors).
+func (s *Session) BindPipe(pipe string, newClient func(cc dcerpc.Conn, sec ...dcerpc.Option) error) error {
+	var lastErr error
+	for _, sec := range s.securityAttempts() {
+		cc, err := s.dial(pipe)
+		if err != nil {
+			lastErr = fmt.Errorf("dial %s: %w", pipe, err)
+			continue
+		}
+		if err := newClient(cc, sec...); err != nil {
+			lastErr = fmt.Errorf("bind %s: %w", pipe, err)
+			continue
+		}
+		return nil
+	}
+	return lastErr
+}
+
 // dialHost is the network address to connect to: the explicit --dc-ip when set,
 // otherwise the target (which also serves as the Kerberos SPN name).
 func (s *Session) dialHost() string {

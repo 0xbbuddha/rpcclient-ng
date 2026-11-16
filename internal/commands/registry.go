@@ -87,6 +87,7 @@ func allCommands() []*Command {
 		lookupSidsCmd,
 		ridCycleCmd,
 		sweepCmd,
+		coerceCmd,
 		createDomUserCmd,
 		delDomUserCmd,
 		setUserPassCmd,
