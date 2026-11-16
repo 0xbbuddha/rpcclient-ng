@@ -68,7 +68,14 @@ func main() {
 		os.Exit(1)
 	}
 	out.Infof("%s", banner)
-	out.Infof("connected to %s (domain: %s)", target, sess.CurrentDomain())
+	// Bind SAMR up front for the domain banner, but do not make it fatal: a
+	// command may target another interface (e.g. rpcdump) on a host where SAMR
+	// is unreachable or denied.
+	if err := sess.EnsureSAMR(); err != nil {
+		out.Infof("connected to %s (samr unavailable: %v)", target, err)
+	} else {
+		out.Infof("connected to %s (domain: %s)", target, sess.CurrentDomain())
+	}
 
 	if *oneShot != "" {
 		script, err := oneShotScript(*oneShot)

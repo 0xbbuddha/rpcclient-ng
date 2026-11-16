@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Thin wrapper: build rpcclient-ng (once) and run it against the lab DC with
+# the given credentials. Everything after the credential selection is passed
+# straight through to rpcclient-ng.
+#
+#   ./lab/rpcng                      # interactive shell as Administrator
+#   ./lab/rpcng -c sweep             # one-shot as Administrator
+#   ./lab/rpcng --user j.doe -c sweep
+#   ./lab/rpcng --null -c lsaquery   # anonymous
+#
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="${REPO_ROOT}/rpcclient-ng"
+
+TARGET="${LAB_TARGET:-dc01.lab.local}"
+DC_IP="${LAB_DC_IP:-127.0.0.1}"
+DOMAIN="${LAB_DOMAIN:-lab.local}"
+USER="${LAB_USER:-Administrator}"
+PASS="${LAB_PASS:-Passw0rd!2024}"
+NULL=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --user) USER="$2"; shift 2 ;;
+        --pass) PASS="$2"; shift 2 ;;
+        --null) NULL=1; shift ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
+# Build if missing or stale.
+if [ ! -x "${BIN}" ] || [ -n "$(find "${REPO_ROOT}" -name '*.go' -newer "${BIN}" -print -quit 2>/dev/null)" ]; then
+    echo "[rpcng] building rpcclient-ng ..." >&2
+    (cd "${REPO_ROOT}" && go build -o "${BIN}" .)
+fi
+
+if [ "${NULL}" -eq 1 ]; then
+    exec "${BIN}" -N -dc-ip "${DC_IP}" "$@" "${TARGET}"
+fi
+
+exec "${BIN}" -d "${DOMAIN}" -u "${USER}" -p "${PASS}" -dc-ip "${DC_IP}" "$@" "${TARGET}"
