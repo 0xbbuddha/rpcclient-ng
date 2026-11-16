@@ -89,6 +89,7 @@ func allCommands() []*Command {
 		sweepCmd,
 		coerceCmd,
 		rpcDumpCmd,
+		winregQueryCmd,
 		createDomUserCmd,
 		delDomUserCmd,
 		setUserPassCmd,

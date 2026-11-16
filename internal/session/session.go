@@ -19,6 +19,7 @@ import (
 	epm "github.com/oiweiwei/go-msrpc/msrpc/epm/epm/v3"
 	lsad "github.com/oiweiwei/go-msrpc/msrpc/lsad/lsarpc/v0"
 	lsat "github.com/oiweiwei/go-msrpc/msrpc/lsat/lsarpc/v0"
+	winreg "github.com/oiweiwei/go-msrpc/msrpc/rrp/winreg/v1"
 	samr "github.com/oiweiwei/go-msrpc/msrpc/samr/samr/v1"
 	srvsvc "github.com/oiweiwei/go-msrpc/msrpc/srvs/srvsvc/v3"
 	wkssvc "github.com/oiweiwei/go-msrpc/msrpc/wkst/wkssvc/v1"
@@ -69,8 +70,9 @@ type Session struct {
 	lsad       lsad.LsarpcClient
 	lsadPolicy *lsad.Handle
 
-	srvs srvsvc.SrvsvcClient
-	wkst wkssvc.WkssvcClient
+	srvs   srvsvc.SrvsvcClient
+	wkst   wkssvc.WkssvcClient
+	winreg winreg.WinregClient
 
 	dialExtra []dcerpc.Option // extra dial options (e.g. Kerberos SMB dialer)
 }
@@ -503,4 +505,36 @@ func (s *Session) WKST() (wkssvc.WkssvcClient, error) {
 		return nil, err
 	}
 	return s.wkst, nil
+}
+
+// ensureWINREG lazily binds the Remote Registry (winreg) interface over the
+// \pipe\winreg named pipe, using the same security fallback ladder as srvsvc.
+func (s *Session) ensureWINREG() error {
+	if s.winreg != nil {
+		return nil
+	}
+	var lastErr error
+	for _, sec := range s.securityAttempts() {
+		cc, err := s.dial("winreg")
+		if err != nil {
+			lastErr = fmt.Errorf("dial winreg: %w", err)
+			continue
+		}
+		cli, err := winreg.NewWinregClient(s.ctx, cc, sec...)
+		if err != nil {
+			lastErr = fmt.Errorf("bind winreg: %w", err)
+			continue
+		}
+		s.winreg = cli
+		return nil
+	}
+	return lastErr
+}
+
+// WINREG returns the bound Remote Registry client, binding on first use.
+func (s *Session) WINREG() (winreg.WinregClient, error) {
+	if err := s.ensureWINREG(); err != nil {
+		return nil, err
+	}
+	return s.winreg, nil
 }
