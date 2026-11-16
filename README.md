@@ -27,6 +27,12 @@ at the first `NT_STATUS_ACCESS_DENIED`.
 
 ## Installation
 
+Prebuilt static binaries for Linux, Windows and macOS (amd64/arm64) are attached
+to each [release](https://github.com/0xbbuddha/rpcclient-ng/releases): download
+the archive for your platform, extract it and run `rpcclient-ng`.
+
+Or install with Go:
+
 ```sh
 go install github.com/0xbbuddha/rpcclient-ng@latest
 ```

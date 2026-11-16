@@ -14,6 +14,9 @@ import (
 
 const banner = `rpcclient-ng - a modern MS-RPC (SAMR/LSAT) client for Active Directory`
 
+// version is overwritten at build time by GoReleaser's ldflags.
+var version = "dev"
+
 func main() {
 	var (
 		user    = flag.String("u", "", "username")
@@ -26,12 +29,18 @@ func main() {
 		noSeal  = flag.Bool("no-seal", false, "disable packet privacy (sealing)")
 		asJSON  = flag.Bool("json", false, "emit output as JSON")
 		oneShot = flag.String("c", "", "run command(s) then exit: \"a; b\", or @file / @- (stdin) for a script")
+		showVer = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n\nUsage: %s [flags] <target>\n\nFlags:\n", banner, os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *showVer {
+		fmt.Println("rpcclient-ng", version)
+		return
+	}
 
 	if flag.NArg() != 1 {
 		flag.Usage()
