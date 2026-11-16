@@ -63,6 +63,20 @@ func TestTableColorAligns(t *testing.T) {
 	}
 }
 
+func TestSemanticLines(t *testing.T) {
+	p := &Printer{color: true}
+	if got := capture(t, func() { p.Section("== X ==") }); !strings.Contains(got, "\x1b[1;36m== X ==") {
+		t.Fatalf("Section color wrong: %q", got)
+	}
+	if got := capture(t, func() { p.Dangerf("admin") }); !strings.Contains(got, "\x1b[31madmin") {
+		t.Fatalf("Dangerf color wrong: %q", got)
+	}
+	j := &Printer{JSON: true}
+	if got := capture(t, func() { j.Section("h"); j.Dangerf("d") }); got != "" {
+		t.Fatalf("JSON mode must suppress Section/Dangerf, got %q", got)
+	}
+}
+
 // stripSGR removes any remaining \x1b[...m sequences so Index gives the visible column.
 func stripSGR(s string) string {
 	for {
