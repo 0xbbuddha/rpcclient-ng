@@ -238,7 +238,7 @@ var enableDomUserCmd = &Command{
 		if err != nil {
 			return err
 		}
-		out.Infof("enabled RID %d (flags now %s)", rid, decodeACB(flags))
+		out.Okf("enabled RID %d (flags now %s)", rid, decodeACB(flags))
 		return nil
 	},
 }
@@ -255,7 +255,7 @@ var disableDomUserCmd = &Command{
 		if err != nil {
 			return err
 		}
-		out.Infof("disabled RID %d (flags now %s)", rid, decodeACB(flags))
+		out.Dangerf("disabled RID %d (flags now %s)", rid, decodeACB(flags))
 		return nil
 	},
 }

@@ -63,6 +63,31 @@ func TestTableColorAligns(t *testing.T) {
 	}
 }
 
+func TestFlagsAndRID(t *testing.T) {
+	p := &Printer{color: true}
+	// Risky tag painted red, safe tag left untouched. Strip the tabwriter \xff
+	// escape markers first so the assertion sees the raw SGR sequence.
+	got := strings.ReplaceAll(p.Flags("AS-REP_ROASTABLE,NORMAL_ACCOUNT"), "\xff", "")
+	if !strings.Contains(got, "\x1b[31mAS-REP_ROASTABLE") {
+		t.Fatalf("risky tag not red: %q", got)
+	}
+	if strings.Contains(got, "\x1b[31mNORMAL_ACCOUNT") {
+		t.Fatalf("safe tag was colored: %q", got)
+	}
+	// Well-known RID highlighted, ordinary RID untouched.
+	if p.RID("500") == "500" {
+		t.Fatal("RID 500 not highlighted")
+	}
+	if p.RID("1104") != "1104" {
+		t.Fatalf("ordinary RID altered: %q", p.RID("1104"))
+	}
+	// Color off: pure passthrough.
+	np := &Printer{}
+	if np.Flags("DISABLED") != "DISABLED" || np.RID("500") != "500" {
+		t.Fatal("no-color passthrough broken")
+	}
+}
+
 func TestSemanticLines(t *testing.T) {
 	p := &Printer{color: true}
 	if got := capture(t, func() { p.Section("== X ==") }); !strings.Contains(got, "\x1b[1;36m== X ==") {
