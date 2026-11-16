@@ -72,7 +72,7 @@ func principalTable(s *session.Session, out *output.Printer, entries []*samr.RID
 	rows := make([][]string, 0, len(entries))
 	for _, e := range entries {
 		rows = append(rows, []string{
-			strconv.FormatUint(uint64(e.RelativeID), 10),
+			out.RID(strconv.FormatUint(uint64(e.RelativeID), 10)),
 			e.Name.Buffer,
 			sid.AddRelativeID(e.RelativeID).String(),
 		})
@@ -254,7 +254,7 @@ var queryUserCmd = &Command{
 			UserInformationClass: samr.UserInformationClassControlInformation,
 		}); err == nil {
 			if c, ok := ctl.Buffer.GetValue().(*samr.UserControlInformation); ok {
-				pairs = append(pairs, [2]string{"Flags", decodeACB(c.UserAccountControl)})
+				pairs = append(pairs, [2]string{"Flags", out.Flags(decodeACB(c.UserAccountControl))})
 			}
 		}
 		out.KeyValues(pairs)

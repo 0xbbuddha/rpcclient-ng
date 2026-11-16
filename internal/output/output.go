@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/mattn/go-isatty"
@@ -16,7 +17,25 @@ const (
 	cKey    = "36"   // cyan
 	cInfo   = "33"   // yellow
 	cError  = "31"   // red
+	cOK     = "32"   // green
+	cRID    = "1;35" // bold magenta
 )
+
+// riskyFlags are the account-control tags an attacker cares about; painted red
+// when a Flags value is rendered.
+var riskyFlags = map[string]bool{
+	"DISABLED": true, "LOCKED": true, "PASSWD_NOT_REQD": true,
+	"PWD_NEVER_EXPIRES": true, "PWD_EXPIRED": true, "AS-REP_ROASTABLE": true,
+	"DES_ONLY": true, "TRUSTED_FOR_DELEG": true, "CONSTRAINED_DELEG": true,
+}
+
+// wellKnownRIDs are built-in privileged RIDs highlighted wherever they appear
+// (Administrator, krbtgt, Domain/Enterprise/Schema Admins, builtin admins, ...).
+var wellKnownRIDs = map[string]bool{
+	"500": true, "502": true, "512": true, "516": true, "518": true,
+	"519": true, "520": true, "544": true, "548": true, "549": true,
+	"550": true, "551": true,
+}
 
 // esc brackets non-printing text so tabwriter (with StripEscape) ignores its
 // width; without it, ANSI codes would misalign every column.
@@ -141,6 +160,38 @@ func (p *Printer) Infof(format string, a ...any) {
 		return
 	}
 	fmt.Println(p.paint(cInfo, fmt.Sprintf(format, a...)))
+}
+
+// Flags paints known risky account-control tags red within a comma-separated
+// flag string, for display in a table/KV cell (alignment preserved). Plain
+// passthrough when color is off.
+func (p *Printer) Flags(s string) string {
+	if !p.color || s == "" {
+		return s
+	}
+	parts := strings.Split(s, ",")
+	for i, t := range parts {
+		if riskyFlags[t] {
+			parts[i] = p.tpaint(cError, t)
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+// RID highlights a well-known privileged RID for a table/KV cell.
+func (p *Printer) RID(s string) string {
+	if !p.color || !wellKnownRIDs[s] {
+		return s
+	}
+	return p.tpaint(cRID, s)
+}
+
+// Okf prints a success line (green, suppressed in JSON mode).
+func (p *Printer) Okf(format string, a ...any) {
+	if p.JSON {
+		return
+	}
+	fmt.Println(p.paint(cOK, fmt.Sprintf(format, a...)))
 }
 
 // Section prints a section header (cyan, suppressed in JSON mode).

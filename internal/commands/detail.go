@@ -124,10 +124,10 @@ var queryDispInfoCmd = &Command{
 		rows := make([][]string, 0, len(users))
 		for _, u := range users {
 			rows = append(rows, []string{
-				strconv.FormatUint(uint64(u.RID), 10),
+				out.RID(strconv.FormatUint(uint64(u.RID), 10)),
 				u.Name,
 				u.Description,
-				decodeACB(u.ACB),
+				out.Flags(decodeACB(u.ACB)),
 			})
 		}
 		out.Table([]string{"RID", "Name", "Description", "Flags"}, rows)
