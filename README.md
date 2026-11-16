@@ -149,6 +149,7 @@ ticket matches), and the local clock within skew of the DC.
 | `netsessenum` | Enumerate the SMB sessions open on the target (admin-only) |
 | `netwkstauserenum` | Enumerate the users logged on at the target (admin-only) |
 | `rpcdump` | Dump every RPC endpoint registered with the endpoint mapper (EPM `ept_lookup` over TCP/135), with well-known interface names |
+| `winreg <HIVE[\subkey]>` | Read a remote registry key over MS-RRP: its values (name, type, decoded data) and subkeys. HIVE is HKLM, HKCU, HKU, HKCR or HKCC |
 
 Commands marked admin-only need membership in Administrators or Server
 Operators (or an `SrvsvcSessionInfo` descriptor that grants access); a
