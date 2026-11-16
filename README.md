@@ -148,6 +148,7 @@ ticket matches), and the local clock within skew of the DC.
 | `netshareenum` | Enumerate the shared resources on the target |
 | `netsessenum` | Enumerate the SMB sessions open on the target (admin-only) |
 | `netwkstauserenum` | Enumerate the users logged on at the target (admin-only) |
+| `rpcdump` | Dump every RPC endpoint registered with the endpoint mapper (EPM `ept_lookup` over TCP/135), with well-known interface names |
 
 Commands marked admin-only need membership in Administrators or Server
 Operators (or an `SrvsvcSessionInfo` descriptor that grants access); a

@@ -16,6 +16,7 @@ import (
 	fcreds "github.com/oiweiwei/gokrb5.fork/v9/credentials"
 
 	"github.com/oiweiwei/go-msrpc/msrpc/dtyp"
+	epm "github.com/oiweiwei/go-msrpc/msrpc/epm/epm/v3"
 	lsad "github.com/oiweiwei/go-msrpc/msrpc/lsad/lsarpc/v0"
 	lsat "github.com/oiweiwei/go-msrpc/msrpc/lsat/lsarpc/v0"
 	samr "github.com/oiweiwei/go-msrpc/msrpc/samr/samr/v1"
@@ -156,6 +157,25 @@ func (s *Session) Connect() error {
 	s.samrServer = conn.Server
 
 	return s.loadDomains()
+}
+
+// EPMClient dials the endpoint mapper over ncacn_ip_tcp (TCP 135) and binds the
+// EPM interface, returning the client and its connection for the caller to
+// close. ept_lookup is queryable anonymously (as impacket's rpcdump does), so
+// the bind is unauthenticated and works for every auth mode, null sessions
+// included. The transport is TCP/135, independent of the SMB named pipes the
+// other interfaces use.
+func (s *Session) EPMClient() (epm.EpmClient, dcerpc.Conn, error) {
+	cc, err := dcerpc.Dial(s.ctx, s.dialHost(), dcerpc.WithEndpoint("ncacn_ip_tcp:[135]"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("dial epm (tcp/135): %w", err)
+	}
+	cli, err := epm.NewEpmClient(s.ctx, cc, dcerpc.WithInsecure())
+	if err != nil {
+		cc.Close(s.ctx)
+		return nil, nil, fmt.Errorf("bind epm: %w", err)
+	}
+	return cli, cc, nil
 }
 
 // dial opens a DCERPC connection to the given named pipe, routing through the
