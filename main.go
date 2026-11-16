@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -24,7 +25,7 @@ func main() {
 		dcIP    = flag.String("dc-ip", "", "IP/host to connect to (keeps <target> as the Kerberos SPN name)")
 		noSeal  = flag.Bool("no-seal", false, "disable packet privacy (sealing)")
 		asJSON  = flag.Bool("json", false, "emit output as JSON")
-		oneShot = flag.String("c", "", "run a single command then exit")
+		oneShot = flag.String("c", "", "run command(s) then exit: \"a; b\", or @file / @- (stdin) for a script")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n\nUsage: %s [flags] <target>\n\nFlags:\n", banner, os.Args[0])
@@ -61,11 +62,24 @@ func main() {
 	out.Infof("connected to %s (domain: %s)", target, sess.CurrentDomain())
 
 	if *oneShot != "" {
-		if fields := shell.Tokenize(*oneShot); len(fields) > 0 {
+		script, err := oneShotScript(*oneShot)
+		if err != nil {
+			out.Errorf("%v", err)
+			os.Exit(1)
+		}
+		failed := false
+		for _, stmt := range shell.SplitStatements(script) {
+			fields := shell.Tokenize(stmt)
+			if len(fields) == 0 {
+				continue
+			}
 			if err := shell.RunCommand(sess, out, fields[0], fields[1:]); err != nil {
 				out.Errorf("%v", err)
-				os.Exit(1)
+				failed = true
 			}
+		}
+		if failed {
+			os.Exit(1)
 		}
 		return
 	}
@@ -85,4 +99,22 @@ func normalizeHash(h string) string {
 		return h[i+1:]
 	}
 	return h
+}
+
+// oneShotScript resolves the -c value to the script text to execute: the value
+// itself, or the contents of a file when it is "@path" ("@-" reads stdin).
+func oneShotScript(spec string) (string, error) {
+	if !strings.HasPrefix(spec, "@") {
+		return spec, nil
+	}
+	path := spec[1:]
+	if path == "-" {
+		b, err := io.ReadAll(os.Stdin)
+		return string(b), err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read script %q: %w", path, err)
+	}
+	return string(b), nil
 }

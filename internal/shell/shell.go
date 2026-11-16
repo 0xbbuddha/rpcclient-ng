@@ -70,6 +70,41 @@ func Tokenize(line string) []string {
 	return tokens
 }
 
+// SplitStatements splits a one-shot/script string into individual command
+// lines, breaking on ';' and newlines but never inside quotes. Blank lines and
+// lines beginning with '#' are dropped. Quotes are kept so Tokenize can reparse
+// each statement.
+func SplitStatements(s string) []string {
+	var stmts []string
+	var buf strings.Builder
+	var quote rune // 0 outside quotes, else the opening quote char
+	flush := func() {
+		st := strings.TrimSpace(buf.String())
+		buf.Reset()
+		if st != "" && !strings.HasPrefix(st, "#") {
+			stmts = append(stmts, st)
+		}
+	}
+	for _, r := range s {
+		switch {
+		case quote != 0:
+			buf.WriteRune(r)
+			if r == quote {
+				quote = 0
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			buf.WriteRune(r)
+		case r == ';' || r == '\n':
+			flush()
+		default:
+			buf.WriteRune(r)
+		}
+	}
+	flush()
+	return stmts
+}
+
 func (sh *Shell) completer() *readline.PrefixCompleter {
 	items := make([]readline.PrefixCompleterInterface, 0)
 	for _, name := range sh.reg.Names() {
