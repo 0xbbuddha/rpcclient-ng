@@ -54,7 +54,7 @@ func main() {
 
 	sess := session.New(cfg)
 	if err := sess.Connect(); err != nil {
-		fmt.Fprintln(os.Stderr, "connect:", err)
+		out.Errorf("connect: %v", err)
 		os.Exit(1)
 	}
 	out.Infof("%s", banner)
@@ -63,7 +63,7 @@ func main() {
 	if *oneShot != "" {
 		if fields := shell.Tokenize(*oneShot); len(fields) > 0 {
 			if err := shell.RunCommand(sess, out, fields[0], fields[1:]); err != nil {
-				fmt.Fprintln(os.Stderr, err)
+				out.Errorf("%v", err)
 				os.Exit(1)
 			}
 		}
