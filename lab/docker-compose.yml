@@ -1,0 +1,63 @@
+# Mini AD lab for rpcclient-ng.
+#
+#   cd lab && docker compose up --build -d
+#
+# The DC gets a fixed IP (172.28.0.10). Add this to the host /etc/hosts so the
+# FQDN resolves (required for Kerberos / -dc-ip-free usage):
+#
+#   172.28.0.10  dc01.lab.local dc01 lab.local LAB
+#
+# Then from the repo root:
+#   ./rpcclient-ng -d lab.local -u Administrator -p 'Passw0rd!2024' dc01.lab.local
+#
+# See lab/README.md for the full per-command test matrix.
+
+services:
+  dc01:
+    build:
+      context: ./dc
+    container_name: rpcng-dc01
+    hostname: DC01
+    # Samba AD DC needs these for its internal DNS / privilege setup.
+    cap_add:
+      - CAP_SYS_ADMIN
+    environment:
+      REALM: LAB.LOCAL
+      DOMAIN: LAB
+      ADMIN_PASSWORD: Passw0rd!2024
+    volumes:
+      # Persist the provisioned domain across restarts. Remove these volumes
+      # (docker compose down -v) to re-provision from scratch.
+      - dc-state:/var/lib/samba
+      - dc-etc:/etc/samba
+    networks:
+      lab:
+        ipv4_address: 172.28.0.10
+    ports:
+      # Published to the host so you can also reach the DC on 127.0.0.1.
+      - "135:135/tcp"   # DCE/RPC endpoint mapper
+      - "139:139/tcp"   # NetBIOS session (ncacn_np)
+      - "445:445/tcp"   # SMB (named pipes used by SAMR/LSA/srvsvc/wkssvc)
+      - "389:389/tcp"   # LDAP
+      - "88:88/tcp"     # Kerberos
+      - "464:464/tcp"   # kpasswd
+    healthcheck:
+      # The DC is ready once SMB answers and the shares list resolves.
+      test: ["CMD-SHELL", "smbclient -L 127.0.0.1 -U 'Administrator%Passw0rd!2024' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+    restart: unless-stopped
+
+networks:
+  lab:
+    name: rpcng-lab
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  dc-state:
+  dc-etc:

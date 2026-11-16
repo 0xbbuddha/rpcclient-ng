@@ -103,7 +103,10 @@ func (s *Session) SessionKey() ([]byte, error) {
 	return nil, fmt.Errorf("no session key available (password encryption needs NTLM auth; not supported for Kerberos or null sessions)")
 }
 
-// Connect authenticates and binds the SAMR interface.
+// Connect sets up authentication and the security context. It does not bind any
+// interface: SAMR (and the SAM domain list) is bound lazily on first use, so a
+// command that needs only another interface — rpcdump over the endpoint mapper,
+// LSA lookups, srvsvc shares — still works when SAMR is unreachable or denied.
 func (s *Session) Connect() error {
 	gssapi.AddMechanism(ssp.SPNEGO)
 	switch {
@@ -137,25 +140,33 @@ func (s *Session) Connect() error {
 	}
 
 	s.ctx = gssapi.NewSecurityContext(context.Background())
+	return nil
+}
 
+// EnsureSAMR binds the SAMR interface and loads the SAM domain list on first
+// use, returning any bind error so a command can surface it. It is idempotent.
+func (s *Session) EnsureSAMR() error { return s.ensureSAMR() }
+
+func (s *Session) ensureSAMR() error {
+	if s.samr != nil {
+		return nil
+	}
 	cc, err := s.dial("samr")
 	if err != nil {
 		return fmt.Errorf("dial samr: %w", err)
 	}
-
-	s.samr, err = samr.NewSamrClient(s.ctx, cc, s.secOpts()...)
+	cli, err := samr.NewSamrClient(s.ctx, cc, s.secOpts()...)
 	if err != nil {
 		return fmt.Errorf("bind samr: %w", err)
 	}
-
-	conn, err := s.samr.Connect(s.ctx, &samr.ConnectRequest{
+	conn, err := cli.Connect(s.ctx, &samr.ConnectRequest{
 		DesiredAccess: dtyp.AccessMaskMaximumAllowed,
 	})
 	if err != nil {
 		return fmt.Errorf("samr connect: %w", err)
 	}
+	s.samr = cli
 	s.samrServer = conn.Server
-
 	return s.loadDomains()
 }
 
@@ -302,14 +313,26 @@ func (s *Session) loadDomains() error {
 	return nil
 }
 
-// Domains returns the discovered domains.
-func (s *Session) Domains() []Domain { return s.domains }
+// Domains returns the discovered domains, binding SAMR on first use. It is
+// best-effort: on a bind error it returns whatever is loaded (nothing), leaving
+// callers that need to surface the error to use EnsureSAMR.
+func (s *Session) Domains() []Domain {
+	_ = s.ensureSAMR()
+	return s.domains
+}
 
-// CurrentDomain returns the active domain name.
-func (s *Session) CurrentDomain() string { return s.currentName }
+// CurrentDomain returns the active domain name, binding SAMR on first use
+// (best-effort, so the prompt degrades to empty rather than failing).
+func (s *Session) CurrentDomain() string {
+	_ = s.ensureSAMR()
+	return s.currentName
+}
 
 // SetCurrentDomain switches the active domain, validating it exists.
 func (s *Session) SetCurrentDomain(name string) error {
+	if err := s.ensureSAMR(); err != nil {
+		return err
+	}
 	for _, d := range s.domains {
 		if d.Name == name {
 			s.currentName = name
@@ -330,6 +353,9 @@ func (s *Session) lookupDomain(name string) (Domain, bool) {
 
 // OpenCurrentDomain returns an open handle to the active domain, caching it.
 func (s *Session) OpenCurrentDomain() (*samr.Handle, *dtyp.SID, error) {
+	if err := s.ensureSAMR(); err != nil {
+		return nil, nil, err
+	}
 	d, ok := s.lookupDomain(s.currentName)
 	if !ok {
 		return nil, nil, fmt.Errorf("no domain selected")

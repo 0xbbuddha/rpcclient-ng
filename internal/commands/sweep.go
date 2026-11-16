@@ -60,6 +60,9 @@ var sweepCmd = &Command{
 }
 
 func sweepRun(s *session.Session, out *output.Printer, _ []string) error {
+	if err := s.EnsureSAMR(); err != nil {
+		return err
+	}
 	rep := sweepReport{
 		Domain:           s.CurrentDomain(),
 		Descriptions:     map[string]string{},

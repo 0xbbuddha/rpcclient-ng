@@ -20,6 +20,9 @@ var enumDomainsCmd = &Command{
 	Usage: "enumdomains",
 	Help:  "List the SAM domains hosted by the server and their SIDs.",
 	Run: func(s *session.Session, out *output.Printer, _ []string) error {
+		if err := s.EnsureSAMR(); err != nil {
+			return err
+		}
 		rows := [][]string{}
 		for _, d := range s.Domains() {
 			marker := ""
@@ -268,6 +271,9 @@ var getDomPwInfoCmd = &Command{
 	Usage:   "getdompwinfo",
 	Help:    "Show the domain password policy (minimum length and properties).",
 	Run: func(s *session.Session, out *output.Printer, _ []string) error {
+		if err := s.EnsureSAMR(); err != nil {
+			return err
+		}
 		resp, err := s.Samr().GetDomainPasswordInformation(s.Context(), &samr.GetDomainPasswordInformationRequest{})
 		if err != nil {
 			return fmt.Errorf("get password info: %w", err)
