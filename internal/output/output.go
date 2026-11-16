@@ -143,6 +143,22 @@ func (p *Printer) Infof(format string, a ...any) {
 	fmt.Println(p.paint(cInfo, fmt.Sprintf(format, a...)))
 }
 
+// Section prints a section header (cyan, suppressed in JSON mode).
+func (p *Printer) Section(format string, a ...any) {
+	if p.JSON {
+		return
+	}
+	fmt.Println(p.paint(cHeader, fmt.Sprintf(format, a...)))
+}
+
+// Dangerf prints a high-risk finding line (red, suppressed in JSON mode).
+func (p *Printer) Dangerf(format string, a ...any) {
+	if p.JSON {
+		return
+	}
+	fmt.Println(p.paint(cError, fmt.Sprintf(format, a...)))
+}
+
 // Errorf prints an error line to stderr.
 func (p *Printer) Errorf(format string, a ...any) {
 	s := fmt.Sprintf(format, a...)

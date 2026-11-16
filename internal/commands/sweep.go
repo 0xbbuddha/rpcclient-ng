@@ -200,7 +200,7 @@ func sweepShares(s *session.Session) ([]string, error) {
 }
 
 func renderSweep(out *output.Printer, rep sweepReport, usedFallback bool) {
-	out.Infof("== Domain ==")
+	out.Section("== Domain ==")
 	out.KeyValues([][2]string{
 		{"Domain", rep.Domain},
 		{"SID", rep.SID},
@@ -208,7 +208,7 @@ func renderSweep(out *output.Printer, rep sweepReport, usedFallback bool) {
 		{"Password complexity", yesNo(rep.PasswordComplexity)},
 	})
 
-	out.Infof("\n== Users (%d) ==", rep.UserCount)
+	out.Section("\n== Users (%d) ==", rep.UserCount)
 	if usedFallback {
 		out.Infof("[!] display info denied; names via LSAT RID cycling (account-control flags unavailable)")
 	}
@@ -227,18 +227,18 @@ func renderSweep(out *output.Printer, rep sweepReport, usedFallback bool) {
 		}
 	}
 
-	out.Infof("\n== Privileged group members ==")
+	out.Section("\n== Privileged group members ==")
 	if len(rep.PrivilegedGroups) == 0 {
 		out.Infof("  (none readable)")
 	} else {
 		for _, g := range privilegedGroups {
 			if m, ok := rep.PrivilegedGroups[g.Name]; ok {
-				out.Infof("  %s: %s", g.Name, strings.Join(m, ", "))
+				out.Dangerf("  %s: %s", g.Name, strings.Join(m, ", "))
 			}
 		}
 	}
 
-	out.Infof("\n== Non-default shares ==")
+	out.Section("\n== Non-default shares ==")
 	if len(rep.NonDefaultShares) == 0 {
 		out.Infof("  (none)")
 	} else {
@@ -246,9 +246,11 @@ func renderSweep(out *output.Printer, rep sweepReport, usedFallback bool) {
 	}
 }
 
+// sweepList prints a risky-account category; every caller is a high-value
+// finding, so the line is rendered as danger (red).
 func sweepList(out *output.Printer, label string, items []string) {
 	if len(items) == 0 {
 		return
 	}
-	out.Infof("%s: %s", label, strings.Join(items, ", "))
+	out.Dangerf("%s: %s", label, strings.Join(items, ", "))
 }
